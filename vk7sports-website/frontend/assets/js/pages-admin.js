@@ -1,11 +1,11 @@
 /* Staff back office. Labels use plain business words; each screen is limited by role. */
 (function () {
-  const { api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap } = VK7;
+  const { invoiceDoc, api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap } = VK7;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
-  /* What a staff member may do. Live mode goes by the areas the server granted; the demo goes by role name. */
+  /* Whether the staff member holds a desk area the server granted. */
   const AREA_FOR_ROLE = { Owner: 'reports', Administrator: 'reports', Sales: 'retailers', Warehouse: 'dispatch', Finance: 'payments' };
-  const allowed = (me, ...roles) => me.areas ? roles.some(r => me.areas.includes(AREA_FOR_ROLE[r])) : roles.includes(me.role);
+  const allowed = (me, ...roles) => roles.some(r => me.areas.includes(AREA_FOR_ROLE[r]));
   const rowLinks = main => on(main, '[data-href]', (el, e) => { if (!e.target.closest('a,button')) location.href = el.dataset.href; });
   const tableSearch = (main, render) => {
     on(main, '[data-q]', () => render(), 'input');
@@ -85,15 +85,15 @@
   });
 
   /* ---------- Enquiries ---------- */
-  const ENQ = ['New', 'In follow-up', 'Quoted', 'Won', 'Lost'];
+  const ENQ = ['New', 'In follow-up', 'Won', 'Closed'];
   page('admin-enquiries', { layout: 'admin', access: 'staff:enquiries' }, async main => {
     let list = await api.admin.enquiries();
-    const render = listing(main, title('Enquiries', 'Bulk, customised and contact-form messages.'), filterBar('Search name, organisation or city', ENQ), (q, s) => {
+    const render = listing(main, title('Enquiries', 'Bulk, customised and contact-form messages from the website.'), filterBar('Search name, organisation or city', ENQ), (q, s) => {
       const r = list.filter(x => (!s || x.status === s) && [x.name, x.organisation, x.city, x.number].join(' ').toLowerCase().includes(q));
       return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Reference</th><th>From</th><th>Type</th><th>Quantity</th><th>Follow up</th><th>Status</th><th></th></tr></thead><tbody>${r.map(x => html`<tr><td class="mono small">${x.number}<div class="muted">${date(x.createdAt)}</div></td><td><strong>${x.organisation}</strong><div class="small muted">${x.name}, ${x.city}</div></td><td>${x.type === 'custom' ? 'Customised' : x.type === 'bulk' ? 'Bulk' : 'Contact'}</td><td>${x.quantity}</td><td>${x.followUp ? date(x.followUp) : '-'}</td><td>${badge(x.status)}</td><td class="right"><button class="btn btn-line btn-sm" data-open="${x.id}">Open</button></td></tr>`)}</tbody></table></div>` : '';
     }, empty('Nothing waiting', 'New enquiries will appear here.', null, 'mail'));
     on(main, '[data-open]', el => {
-      const e = list.find(x => x.id === el.dataset.open);
+      const e = list.find(x => String(x.id) === el.dataset.open);
       modal(e.number, html`<div class="stack"><dl class="kv"><dt>From</dt><dd>${e.name}, ${e.organisation}</dd><dt>Type</dt><dd>${e.orgType}</dd><dt>Mobile</dt><dd>${e.phone}</dd><dt>Email</dt><dd>${e.email || '-'}</dd><dt>Quantity</dt><dd>${e.quantity}</dd><dt>Message</dt><dd>${e.message}</dd>${e.artworkName ? html`<dt>Artwork</dt><dd>${e.artworkName}</dd>` : ''}</dl>
         ${e.notes.length ? html`<div><h4 class="mb">Notes</h4>${e.notes.map(n => html`<p class="small mb-0"><strong>${n.by}</strong> ${dateTime(n.at)}<br>${n.text}</p>`)}</div>` : ''}
         <form class="form" novalidate><div class="form-2">${field('status', 'Status', { type: 'select', value: e.status, options: ENQ })}${field('followUp', 'Follow-up date', { type: 'date', value: e.followUp ? e.followUp.slice(0, 10) : '' })}</div>${field('note', 'Add a note', { type: 'textarea', rows: 2 })}<button class="btn btn-red" type="submit">Save</button></form></div>`, async v => {
@@ -121,16 +121,17 @@
       const listTotal = q.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
       main.innerHTML = html`<a class="link small" href="admin-quotes.html">Back to quotes</a>${title(q.number, q.company + ' · requested ' + date(q.createdAt), badge(q.status))}
       <form class="stack" id="offer" novalidate>
-        ${q.shortageAcknowledged ? notice('warn', 'Stock shortage', 'The retailer accepted that some sizes may take longer.') : ''}
+        ${q.note ? notice('info', 'Message from the retailer', q.note) : ''}
         <div class="card"><div class="card-head"><h3>Lines</h3><span class="small muted">List value ${money(listTotal)}</span></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">List price</th><th class="num">Offer price (₹)</th></tr></thead><tbody>${q.lines.map((l, i) => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num"><label class="sr" for="p${i}">Offer price for ${l.name} ${l.colour} ${l.size}</label><input id="p${i}" name="p${i}" class="input" style="width:100px;min-height:36px;padding:4px 8px;text-align:right" type="number" step="0.01" min="0" value="${l.offerPrice ?? l.unitPrice}" ${editable ? '' : raw('disabled')}></td></tr>`)}</tbody></table></div></div>
         <div class="card"><div class="card-head"><h3>Messages</h3></div><div class="card-pad stack">${q.messages.length ? q.messages.map(m => html`<p class="mb-0"><strong>${m.by}</strong> <span class="small muted">${dateTime(m.at)}</span><br>${m.text}</p>`) : html`<p class="muted mb-0">No messages.</p>`}
-          ${editable ? html`${field('message', 'Message to retailer', { type: 'textarea', rows: 2 })}<div><button class="btn btn-red" type="submit">Send offer</button></div>` : ''}</div></div>
+          ${editable ? html`${field('message', 'Message to retailer', { type: 'textarea', rows: 2 })}<div class="row"><button class="btn btn-red" type="submit">Send offer</button><button class="btn btn-danger" type="button" data-reject>Reject quote</button></div>` : ''}</div></div>
       </form>`;
       if (editable) onSubmit(main.querySelector('#offer'), async v => {
-        await api.admin.sendOffer(id, { prices: q.lines.map((_, i) => v['p' + i]), message: v.message });
+        await api.admin.sendOffer(id, { prices: Object.fromEntries(q.lines.map((l, i) => [l.id, v['p' + i]])), message: v.message });
         toast('Offer sent'); await render();
       });
     };
+    on(main, '[data-reject]', () => reasonBox('Reject quote', 'The retailer will see this reason.', 'Reject quote', async r => { await api.admin.rejectQuote(id, r); toast('Quote rejected'); await render(); }));
     await render();
   });
 
@@ -166,7 +167,7 @@
       if (!['Dispatched', 'Delivered', 'Paid in full', 'Cancelled', 'Expired'].includes(o.status) && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-danger" data-cancel>Cancel order</button>`);
 
       main.innerHTML = html`<a class="link small" href="admin-orders.html">Back to orders</a>
-      ${title(o.number, o.company + ' · ' + (o.type === 'custom' ? 'Customised' : 'Regular') + ' · ' + date(o.createdAt), badge(o.status))}
+      ${title(o.number, o.company + ' · ' + date(o.createdAt), html`<div class="row">${badge(o.status)}<a class="btn btn-line btn-sm" href="admin-invoice.html?id=${o.id}">View invoice</a></div>`)}
       <div class="stack">
         <div class="card card-pad">${tracker(o)}${actions.length ? html`<div class="row mt-l">${actions}</div>` : ''}</div>
         ${o.tracking ? trackingPanel(o.tracking) : ''}
@@ -232,29 +233,50 @@
   });
 
   /* ---------- Products ---------- */
+  const NO_PHOTO = 'assets/img/brand/mark-navy.png';
   page('admin-products', { layout: 'admin', access: 'staff:products' }, async main => {
     const list = await api.admin.products();
     listing(main, title('Products', 'Styles shown in the catalogue.', html`<a class="btn btn-red" href="admin-product.html">Add product</a>`), filterBar('Search name or code', ['active', 'hidden']), (q, s) => {
       const r = list.filter(x => (!s || x.status === s) && [x.name, x.style].join(' ').toLowerCase().includes(q));
-      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Style</th><th>Code</th><th class="num">Colours</th><th class="num">Price</th><th class="num">Available</th><th>Status</th></tr></thead><tbody>${r.map(p => html`<tr class="click" data-href="admin-product.html?id=${p.id}"><td><div class="row" style="flex-wrap:nowrap"><img src="${p.colours[0].images[0]}" alt="" width="40" height="50" style="object-fit:cover;border-radius:4px"><a href="admin-product.html?id=${p.id}"><strong>${p.name}</strong></a></div></td><td class="mono small">${p.style}</td><td class="num">${p.colours.length}</td><td class="num">${money(p.price)}</td><td class="num">${p.totalAvailable}</td><td><span class="badge ${p.status === 'active' ? 'b-ok' : 'b-mute'}">${p.status === 'active' ? 'Active' : 'Hidden'}</span></td></tr>`)}</tbody></table></div>` : '';
-    }, empty('No products found', 'Try a different search.'));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Style</th><th>Code</th><th class="num">Colours</th><th class="num">Price</th><th class="num">Available</th><th>Status</th></tr></thead><tbody>${r.map(p => html`<tr class="click" data-href="admin-product.html?id=${p.id}"><td><div class="row" style="flex-wrap:nowrap"><img src="${p.colours[0]?.images[0] || NO_PHOTO}" alt="" width="40" height="50" style="object-fit:cover;border-radius:4px"><a href="admin-product.html?id=${p.id}"><strong>${p.name}</strong></a></div></td><td class="mono small">${p.style}</td><td class="num">${p.colours.length}</td><td class="num">${money(p.price)}</td><td class="num">${p.totalAvailable}</td><td><span class="badge ${p.status === 'active' ? 'b-ok' : 'b-mute'}">${p.status === 'active' ? 'Active' : 'Hidden'}</span></td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No products yet', 'Add your first product and it will appear in the catalogue.', html`<a class="btn btn-red" href="admin-product.html">Add product</a>`));
   });
 
   page('admin-product', { layout: 'admin', access: 'staff:products' }, async main => {
     const id = param('id');
-    const p = id ? await api.admin.product(id) : { status: 'active', gender: 'Men', sizes: [] };
-    const cats = await api.catalog.categories();
-    main.innerHTML = html`<a class="link small" href="admin-products.html">Back to products</a>${title(id ? p.name : 'Add product', id ? p.style : 'New styles start with no stock. Add stock in Inventory.')}
-    <div class="form-card"><form class="form" novalidate><input type="hidden" name="id" value="${id || ''}">
-      <div class="form-2">${field('name', 'Style name', { required: true, value: p.name || '' })}${field('style', 'Style code', { required: true, value: p.style || '' })}</div>
-      <div class="form-2">${field('category', 'Category', { type: 'select', required: true, value: p.category || '', options: [['', 'Select'], ...cats.map(c => [c.id, c.name])] })}${field('gender', 'For', { type: 'select', value: p.gender, options: ['Men', 'Women', 'Unisex'] })}</div>
-      <div class="form-2">${field('price', 'Trade price (₹ per piece)', { required: true, type: 'number', value: p.price ?? '' })}${field('status', 'Status', { type: 'select', value: p.status, options: [['active', 'Active: shown in catalogue'], ['hidden', 'Hidden']] })}</div>
-      ${id ? '' : html`<div class="form-2">${field('colour', 'First colour', { required: true, value: '' })}${field('sizes', 'Sizes', { value: 'S,M,L,XL', hint: 'Separate with commas.' })}</div>`}
-      ${field('summary', 'Short description', { value: p.summary || '' })}${field('description', 'Full description', { type: 'textarea', value: p.description || '' })}
-      ${checkbox('customisable', 'Can be customised', { checked: p.customisable })}${checkbox('isNew', 'Show the New tag', { checked: p.isNew })}
-      ${id ? html`<div><span class="label">Colours and photos</span><div class="row mt">${p.colours.map(c => html`<div class="center small"><img src="${c.images[0]}" alt="" width="64" height="80" style="object-fit:cover;border-radius:4px;border:1px solid var(--line)">${c.name}<div class="muted">${c.images.length} ${c.images.length === 1 ? 'photo' : 'photos'}</div></div>`)}</div><p class="hint mt mb-0">Adding colours and uploading photos needs the backend connected.</p></div>` : ''}
-      <div class="row"><button class="btn btn-red" type="submit">Save product</button><a class="btn btn-line" href="admin-products.html">Cancel</a></div></form></div>`;
-    onSubmit(main.querySelector('form'), async v => { await api.admin.saveProduct(v); location.href = 'admin-products.html'; });
+    const cats = await api.admin.categories();
+    const colourRow = c => html`<div class="row" data-colour-row style="flex-wrap:nowrap"><input class="input" aria-label="Colour name" data-colour-name value="${c.name || ''}" placeholder="For example Sky Blue" ${c.name ? raw('readonly') : ''}><input type="color" aria-label="Colour swatch" data-colour-hex value="${c.hex || '#0A1121'}" style="width:52px;height:44px;padding:2px;border:1px solid var(--line-2);border-radius:8px;background:#fff"></div>`;
+    const render = async () => {
+      const p = id ? await api.admin.product(id) : { status: 'active', colours: [], sizes: [] };
+      main.innerHTML = html`<a class="link small" href="admin-products.html">Back to products</a>${title(id ? p.name : 'Add product', id ? p.style : 'Add the details, then upload photos for each colour.')}
+      <div class="stack">
+      ${param('new') ? notice('ok', 'Product added', 'Now upload photos for each colour below.') : ''}
+      <div class="form-card"><form class="form" novalidate>
+        <div class="form-2">${field('name', 'Style name', { required: true, value: p.name || '' })}${field('style', 'Style code', { required: true, value: p.style || '', hint: id ? 'The code cannot be changed.' : 'Letters, numbers and dashes. For example VK7-TEE-01.' })}</div>
+        <div class="form-2">${field('category_id', 'Category', { type: 'select', value: p.category_id || '', options: [['', 'Select'], ...cats.map(c => [c.id, c.name])] })}${field('newCategory', 'Or add a new category', { placeholder: 'For example T-Shirts' })}</div>
+        <div class="form-2">${field('price', 'Trade price (₹ per piece)', { required: true, type: 'number', value: p.price ?? '' })}${field('status', 'Status', { type: 'select', value: p.status, options: [['active', 'Active: shown in catalogue'], ['hidden', 'Hidden']] })}</div>
+        <div class="field" data-field="colours"><span class="label">Colours <span class="req">*</span></span><div class="stack" id="colours" style="gap:8px">${(p.colours.length ? p.colours : [{}]).map(colourRow)}</div><div><button class="btn btn-line btn-sm" type="button" data-add-colour>Add a colour</button></div><span class="err" hidden></span></div>
+        <div class="form-2">${field('sizes', 'Sizes', { required: true, value: p.sizes.join(', '), hint: 'Separate with commas. For example S, M, L, XL.' })}${id ? '' : field('stock', 'Opening stock per size and colour', { type: 'number', value: 0, hint: 'You can correct each one later in Inventory.' })}</div>
+        ${field('summary', 'Short description', { value: p.summary || '' })}${field('description', 'Full description', { type: 'textarea', value: p.description || '' })}
+        <div class="row"><button class="btn btn-red" type="submit">Save product</button><a class="btn btn-line" href="admin-products.html">Cancel</a></div></form></div>
+      ${id ? html`<div class="card"><div class="card-head"><h3>Photos by colour</h3><span class="small muted">JPG, PNG or WebP, up to 8 MB each</span></div><div class="card-pad stack">${p.colours.map(c => html`<div><strong>${c.name}</strong><div class="row mt" style="margin-top:8px">${c.images.map(img => html`<div style="position:relative"><img src="${img.url}" alt="${c.name}" width="84" height="104" style="object-fit:cover;border-radius:4px;border:1px solid var(--line)"><button type="button" class="btn btn-danger btn-sm" style="min-height:26px;padding:2px 8px;position:absolute;top:4px;right:4px" aria-label="Remove photo" data-remove-photo="${img.id}">×</button></div>`)}<label class="btn btn-line btn-sm">Upload photos<input class="sr" type="file" accept=".jpg,.jpeg,.png,.webp" multiple data-upload="${c.name}"></label></div></div>`)}</div></div>` : ''}
+      </div>`;
+      if (id) { const s = main.querySelector('#f-style'); s.readOnly = true; }
+      onSubmit(main.querySelector('form'), async v => {
+        const colours = [...main.querySelectorAll('[data-colour-row]')].map(r => ({ name: r.querySelector('[data-colour-name]').value.trim(), hex: r.querySelector('[data-colour-hex]').value })).filter(c => c.name);
+        const sizes = v.sizes.split(',').map(x => x.trim()).filter(Boolean);
+        const r = await api.admin.saveProduct({ ...v, id, colours, sizes });
+        if (id) { toast('Product saved'); await render(); } else location.href = 'admin-product.html?id=' + r.id + '&new=1';
+      });
+    };
+    on(main, '[data-add-colour]', () => main.querySelector('#colours').insertAdjacentHTML('beforeend', colourRow({})));
+    on(main, '[data-upload]', async el => {
+      if (!el.files.length) return;
+      await act(() => api.admin.uploadPhotos(id, el.dataset.upload, el.files), 'Photos uploaded');
+      await render();
+    }, 'change');
+    on(main, '[data-remove-photo]', el => confirmBox('Remove photo', 'This photo will be removed from the website.', 'Remove', async () => { await api.admin.removePhoto(id, el.dataset.removePhoto); await render(); }, true));
+    await render();
   });
 
   /* ---------- Inventory ---------- */
@@ -265,14 +287,14 @@
       const [inv, log] = await Promise.all([api.admin.inventory(), api.admin.stockLog()]);
       main.innerHTML = html`${title('Inventory', 'Available = on hand minus stock held for orders. Every correction needs a reason.')}
       <div class="card mb"><div class="tabs" role="tablist"><button role="tab" aria-selected="${String(tab === 'stock')}" data-tab="stock">Stock by size and colour</button><button role="tab" aria-selected="${String(tab === 'log')}" data-tab="log">Correction log</button></div></div>
-      ${tab === 'stock' ? html`<div class="stack">${inv.map(p => html`<details class="card" open><summary class="card-head" style="cursor:pointer"><strong>${p.name}</strong><span class="small muted mono">${p.style}</span></summary><div class="tw"><table class="t"><thead><tr><th>Colour</th><th>Size</th><th class="num">On hand</th><th class="num">Held</th><th class="num">Available</th><th></th></tr></thead><tbody>${p.rows.map(r => html`<tr><td>${r.colour}</td><td>${r.size}</td><td class="num">${r.onHand}</td><td class="num">${r.held}</td><td class="num"><strong>${r.available}</strong>${r.available === 0 ? html` <span class="badge b-bad">Out</span>` : ''}</td><td class="right"><button class="btn btn-line btn-sm" data-adj data-p="${p.id}" data-n="${p.name}" data-c="${r.colour}" data-z="${r.size}">Adjust</button></td></tr>`)}</tbody></table></div></details>`)}</div>`
+      ${tab === 'stock' ? (inv.length ? html`<div class="stack">${inv.map(p => html`<details class="card" open><summary class="card-head" style="cursor:pointer"><strong>${p.name}</strong><span class="small muted mono">${p.style}</span></summary><div class="tw"><table class="t"><thead><tr><th>Colour</th><th>Size</th><th class="num">On hand</th><th class="num">Held</th><th class="num">Available</th><th></th></tr></thead><tbody>${p.rows.map(r => html`<tr><td>${r.colour}</td><td>${r.size}</td><td class="num">${r.onHand}</td><td class="num">${r.held}</td><td class="num"><strong>${r.available}</strong>${r.available === 0 ? html` <span class="badge b-bad">Out</span>` : ''}</td><td class="right"><button class="btn btn-line btn-sm" data-adj data-v="${r.variantId}" data-n="${p.name}" data-c="${r.colour}" data-z="${r.size}">Adjust</button></td></tr>`)}</tbody></table></div></details>`)}</div>` : html`<div class="card">${empty('No products yet', 'Add a product first, then manage its stock here.', html`<a class="btn btn-red" href="admin-product.html">Add product</a>`, 'list')}</div>`)
         : html`<div class="card">${log.length ? html`<div class="tw"><table class="t"><thead><tr><th>When</th><th>Item</th><th class="num">Change</th><th class="num">New on hand</th><th>Reason</th><th>By</th></tr></thead><tbody>${log.map(l => html`<tr><td>${dateTime(l.at)}</td><td>${l.product}<div class="small muted">${l.variant}</div></td><td class="num">${l.change > 0 ? '+' : ''}${l.change}</td><td class="num">${l.after}</td><td>${l.reason}${l.note ? html`<div class="small muted">${l.note}</div>` : ''}</td><td>${l.by}</td></tr>`)}</tbody></table></div>` : empty('No corrections yet', 'Stock corrections will be listed here.', null, 'list')}</div>`}`;
     };
     on(main, '[data-tab]', el => { tab = el.dataset.tab; render(); });
     on(main, '[data-adj]', el => {
       const d = el.dataset;
       modal('Adjust stock', html`<form class="form" novalidate><p class="mb-0"><strong>${d.n}</strong><br><span class="muted">${d.c}, size ${d.z}</span></p>${field('change', 'Change in pieces', { type: 'number', required: true, hint: 'Use a minus sign to reduce. For example -5.' })}${field('reason', 'Reason', { type: 'select', required: true, options: [['', 'Select'], ...REASONS] })}${field('note', 'Note', { })}<button class="btn btn-red" type="submit">Save correction</button></form>`, async v => {
-        await api.admin.adjustStock({ productId: d.p, colour: d.c, size: d.z, ...v }); toast('Stock updated'); await render();
+        await api.admin.adjustStock({ variantId: Number(d.v), ...v }); toast('Stock updated'); await render();
       });
     });
     await render();
@@ -300,42 +322,54 @@
   });
 
   /* ---------- Staff, settings, log ---------- */
-  const ROLES = ['Owner', 'Administrator', 'Sales', 'Inventory', 'Warehouse', 'Finance'];
-  const ROLE_TEXT = { Owner: 'Sees everything and approves exceptions', Administrator: 'Manages users, settings and the activity log', Sales: 'Approves retailers, answers enquiries and quotes', Inventory: 'Keeps stock correct, with reasons', Warehouse: 'Packs, dispatches, confirms delivery', Finance: 'Verifies and records payments' };
+  const ROLE_TEXT = { Administrator: 'Sees and manages everything', Sales: 'Approves clients, answers enquiries and quotes', Inventory: 'Manages products and stock', Warehouse: 'Packs, dispatches and follows deliveries', Finance: 'Verifies and records payments' };
   page('admin-staff', { layout: 'admin', access: 'staff:staff' }, async main => {
-    const form = s => html`<form class="form" novalidate><input type="hidden" name="id" value="${s.id || ''}">${field('name', 'Name', { required: true, value: s.name || '' })}${field('email', 'Work email', { type: 'email', required: true, value: s.email || '' })}${field('role', 'Role', { type: 'select', required: true, value: s.role || 'Sales', options: ROLES })}<button class="btn btn-red" type="submit">Save</button></form>`;
+    let data;
+    const form = s => html`<form class="form" novalidate><input type="hidden" name="id" value="${s.id || ''}">${field('name', 'Name', { required: true, value: s.name || '' })}${s.id ? '' : html`${field('email', 'Work email', { type: 'email', required: true })}${field('password', 'First password', { type: 'password', required: true, hint: 'At least 10 characters. Share it privately.' })}`}${field('role_id', 'Role', { type: 'select', required: true, value: s.role_id || '', options: data.roles.map(r => [r.id, r.name]) })}<button class="btn btn-red" type="submit">Save</button></form>`;
     const render = async () => {
-      const list = await api.admin.staff();
-      main._staff = list;
+      data = await api.admin.staff();
       main.innerHTML = html`${title('Staff and roles', 'Each role only sees its own work.', html`<button class="btn btn-red" data-add>Add staff</button>`)}
-      <div class="stack"><div class="card"><div class="tw"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${list.map(s => html`<tr><td>${s.name}</td><td>${s.email}</td><td>${s.role}</td><td>${badge(s.active ? 'Active' : 'Inactive')}</td><td class="right nowrap"><button class="btn btn-line btn-sm" data-edit="${s.id}">Edit</button> <button class="btn btn-ghost btn-sm" data-toggle="${s.id}">${s.active ? 'Deactivate' : 'Reactivate'}</button></td></tr>`)}</tbody></table></div></div>
-      <div class="card"><div class="card-head"><h3>What each role does</h3></div><div class="tw"><table class="t"><tbody>${ROLES.map(r => html`<tr><td><strong>${r}</strong></td><td>${ROLE_TEXT[r]}</td></tr>`)}</tbody></table></div></div></div>`;
+      <div class="stack"><div class="card"><div class="tw"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${data.staff.map(s => html`<tr><td>${s.name}</td><td>${s.email}</td><td>${s.role}</td><td>${badge(s.active ? 'Active' : 'Inactive')}</td><td class="right nowrap"><button class="btn btn-line btn-sm" data-edit="${s.id}">Edit</button> <button class="btn btn-ghost btn-sm" data-toggle="${s.id}">${s.active ? 'Deactivate' : 'Reactivate'}</button></td></tr>`)}</tbody></table></div></div>
+      <div class="card"><div class="card-head"><h3>What each role does</h3></div><div class="tw"><table class="t"><tbody>${data.roles.map(r => html`<tr><td><strong>${r.name}</strong></td><td>${ROLE_TEXT[r.name] || r.description || ''}</td></tr>`)}</tbody></table></div></div></div>`;
     };
     const save = async v => { await api.admin.saveStaff(v); toast('Saved'); await render(); };
     on(main, '[data-add]', () => modal('Add staff', form({}), save));
-    on(main, '[data-edit]', el => modal('Edit staff', form(main._staff.find(s => s.id === el.dataset.edit)), save));
+    on(main, '[data-edit]', el => modal('Edit staff', form(data.staff.find(s => String(s.id) === el.dataset.edit)), save));
     on(main, '[data-toggle]', el => act(() => api.admin.toggleStaff(el.dataset.toggle), 'Saved').then(render));
     await render();
   });
 
   page('admin-settings', { layout: 'admin', access: 'staff:settings' }, async main => {
     const s = await api.admin.allSettings();
-    main.innerHTML = html`${title('Settings', 'Business rules. Change them here, without touching any code.')}
-    <div class="stack" style="max-width:760px">${notice('warn', 'Planning values', 'These values are planning defaults. They need confirmation from the VK7SPORTS owner before real use.')}
+    main.innerHTML = html`${title('Settings', 'Company details and business rules, without touching any code.')}
+    <div class="stack" style="max-width:760px">
     <div class="form-card"><form class="form" novalidate>
+      <h3>Company details</h3><p class="hint mb-0">Shown on the website, invoices and the Contact page.</p>
+      ${field('legalName', 'Registered company name', { value: s.legalName || '' })}
+      ${field('address', 'Registered address', { type: 'textarea', rows: 2, value: s.address || '' })}
+      <div class="form-2">${field('gstin', 'GSTIN', { value: s.gstin || '', maxlength: 15 })}${field('phone', 'Phone', { value: s.phone || '' })}</div>
+      <div class="form-2">${field('email', 'Email', { type: 'email', value: s.email || '' })}${field('whatsapp', 'WhatsApp number', { value: s.whatsapp || '', hint: 'With country code, digits only.' })}</div>
+      ${field('hours', 'Business hours', { value: s.hours || '' })}
+      <h3>Bank and UPI details</h3><p class="hint mb-0">Shown to signed-in retailers when a payment is due.</p>
+      <div class="form-2">${field('upiId', 'UPI ID', { value: s.upiId || '' })}${field('bankName', 'Bank', { value: s.bankName || '' })}</div>
+      <div class="form-2">${field('accountName', 'Account name', { value: s.accountName || '' })}${field('accountNumber', 'Account number', { value: s.accountNumber || '' })}</div>
+      ${field('ifsc', 'IFSC', { value: s.ifsc || '' })}
       <h3>Minimum order</h3>
-      ${checkbox('moqEnabled', 'Check the minimum order on every order', { checked: s.moqEnabled })}
-      ${checkbox('moqOnQuotes', 'Also check it on quote requests', { checked: s.moqOnQuotes })}
-      <div class="form-2">${field('moq', 'Regular minimum (pieces)', { type: 'number', required: true, value: s.moq, min: 1 })}${field('moqMode', 'Count it', { type: 'select', value: s.moqMode, options: [['per_style', 'Per style: sizes and colours count together'], ['per_variant', 'Per size and colour'], ['per_order', 'Across the whole order']] })}</div>
-      ${field('customMoq', 'Customised minimum (pieces)', { type: 'number', required: true, value: s.customMoq, min: 1 })}
-      <h3>Payments</h3>
-      <div class="form-2">${field('advancePct', 'Regular advance (%)', { type: 'number', required: true, value: s.advancePct, min: 0, max: 100 })}${field('customAdvancePct', 'Customised advance (%)', { type: 'number', required: true, value: s.customAdvancePct, min: 0, max: 100 })}</div>
-      <h3>Stock and quotes</h3>
-      <div class="form-2">${field('holdHours', 'Stock hold (hours)', { type: 'number', required: true, value: s.holdHours })}${field('quoteValidityDays', 'Quote valid for (days)', { type: 'number', required: true, value: s.quoteValidityDays })}</div>
-      ${field('lowStock', 'Low-stock alert (pieces)', { type: 'number', required: true, value: s.lowStock })}
-      ${field('shortageNote', 'Message when stock is short', { value: s.shortageNote })}
+      ${checkbox('moqEnabled', 'Check the minimum order on every order and quote', { checked: s.moqEnabled })}
+      <div class="form-2">${field('moq', 'Minimum pieces', { type: 'number', required: true, value: s.moq, min: 1 })}${field('moqMode', 'Count it', { type: 'select', value: s.moqMode, options: [['per_style', 'Per style: sizes and colours count together'], ['per_variant', 'Per size and colour'], ['per_order', 'Across the whole order']] })}</div>
+      <h3>Payments and stock</h3>
+      <div class="form-2">${field('advancePct', 'Advance required (%)', { type: 'number', required: true, value: s.advancePct, min: 0, max: 100 })}${field('holdHours', 'Stock hold (hours)', { type: 'number', required: true, value: s.holdHours })}</div>
+      <div class="form-2">${field('quoteValidityDays', 'Quote valid for (days)', { type: 'number', required: true, value: s.quoteValidityDays })}${field('lowStock', 'Low-stock alert (pieces)', { type: 'number', required: true, value: s.lowStock ?? 20 })}</div>
+      <h3>Invoices</h3>
+      ${checkbox('taxInvoiceApproved', 'Our chartered accountant has approved this invoice format as a tax invoice', { checked: s.taxInvoiceApproved })}
       <div><button class="btn btn-red" type="submit">Save settings</button></div></form></div></div>`;
     onSubmit(main.querySelector('form'), async v => { await api.admin.saveSettings(v); toast('Settings saved'); });
+  });
+
+  page('admin-invoice', { layout: 'admin', access: 'staff:orders' }, async main => {
+    const id = param('id'), i = await api.admin.invoice(id);
+    main.innerHTML = html`<div class="row no-print"><button class="btn btn-navy" data-print>Print or save as PDF</button><a class="btn btn-line" href="admin-order.html?id=${id}">Back to order</a></div>${invoiceDoc(i)}`;
+    on(main, '[data-print]', () => window.print());
   });
 
   page('admin-audit', { layout: 'admin', access: 'staff:audit' }, async main => {

@@ -29,5 +29,17 @@ class Enquiry extends Model
         'product_id',
         'message',
         'status',
+        'notes',
+        'follow_up_on',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'notes' => 'array',
+        'follow_up_on' => 'date',
     ];
 }

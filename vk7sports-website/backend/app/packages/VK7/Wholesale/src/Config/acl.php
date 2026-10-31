@@ -50,6 +50,42 @@ return [
         'sort' => 7,
     ],
     [
+        'key' => 'vk7_desk.enquiries',
+        'name' => 'Enquiries',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 8,
+    ],
+    [
+        'key' => 'vk7_desk.quotes',
+        'name' => 'Quotes',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 9,
+    ],
+    [
+        'key' => 'vk7_desk.products',
+        'name' => 'Products',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 10,
+    ],
+    [
+        'key' => 'vk7_desk.inventory',
+        'name' => 'Inventory',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 11,
+    ],
+    [
+        'key' => 'vk7_desk.staff',
+        'name' => 'Staff',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 12,
+    ],
+    [
+        'key' => 'vk7_desk.settings',
+        'name' => 'Settings',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 13,
+    ],
+    [
         'key' => 'customers.vk7_enquiries',
         'name' => 'Enquiries',
         'route' => 'admin.vk7.enquiries.index',

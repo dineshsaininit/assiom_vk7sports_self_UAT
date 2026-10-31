@@ -26,6 +26,8 @@ class OrderTerm extends Model
         'advance_due',
         'total',
         'hold_until',
+        'invoice_number',
+        'invoiced_at',
     ];
 
     /**
@@ -38,5 +40,6 @@ class OrderTerm extends Model
         'advance_due' => 'float',
         'total' => 'float',
         'hold_until' => 'datetime',
+        'invoiced_at' => 'datetime',
     ];
 }

@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use VK7\Wholesale\Cart;
 use VK7\Wholesale\Console\Commands\ApplyPolicy;
-use VK7\Wholesale\Console\Commands\DemoCatalogue;
 use VK7\Wholesale\Console\Commands\DemoData;
 use VK7\Wholesale\Console\Commands\ExpireHolds;
 use VK7\Wholesale\Console\Commands\ResetAdminTwoFactor;
+use VK7\Wholesale\Console\Commands\SetupStore;
 use VK7\Wholesale\Couriers\CourierProvider;
 use VK7\Wholesale\Exceptions\Handler;
 use VK7\Wholesale\Http\Middleware\Bouncer;
+use VK7\Wholesale\Http\Middleware\CloseBagistoAdmin;
 use VK7\Wholesale\Http\Middleware\HidePricesFromGuests;
 use VK7\Wholesale\Moq;
 use VK7\Wholesale\OrderNumberSequencer;
@@ -72,12 +73,14 @@ class WholesaleServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(dirname(__DIR__).'/Routes/admin.php');
 
+        $router->pushMiddlewareToGroup('web', CloseBagistoAdmin::class);
+
         $router->pushMiddlewareToGroup('web', HidePricesFromGuests::class);
 
         $this->registerRateLimits();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ApplyPolicy::class, DemoCatalogue::class, DemoData::class, ExpireHolds::class, ResetAdminTwoFactor::class]);
+            $this->commands([ApplyPolicy::class, DemoData::class, ExpireHolds::class, ResetAdminTwoFactor::class, SetupStore::class]);
 
             $this->callAfterResolving(Schedule::class, fn (Schedule $schedule) => $schedule->command('vk7:expire-holds')->hourly());
         }

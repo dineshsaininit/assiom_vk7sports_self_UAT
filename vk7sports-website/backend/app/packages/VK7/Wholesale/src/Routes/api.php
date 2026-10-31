@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use VK7\Wholesale\Http\Controllers\Api\AccountController;
+use VK7\Wholesale\Http\Controllers\Api\Admin\AdminDeskController;
 use VK7\Wholesale\Http\Controllers\Api\Admin\DeskController;
 use VK7\Wholesale\Http\Controllers\Api\Admin\StaffAuthController;
 use VK7\Wholesale\Http\Controllers\Api\AuthController;
@@ -35,6 +36,68 @@ Route::group([
             Route::get('me', [StaffAuthController::class, 'me'])->name('me');
 
             Route::post('logout', [StaffAuthController::class, 'logout'])->name('logout');
+        });
+
+        Route::controller(AdminDeskController::class)->group(function () {
+            Route::get('orders/{id}/invoice', 'invoice')->middleware(AuthenticateStaff::class.':orders')->name('orders.invoice');
+
+            Route::middleware(AuthenticateStaff::class.':products')->group(function () {
+                Route::get('categories', 'categories')->name('categories.index');
+
+                Route::post('categories', 'storeCategory')->name('categories.store');
+
+                Route::get('products', 'products')->name('products.index');
+
+                Route::post('products', 'storeProduct')->name('products.store');
+
+                Route::get('products/{id}', 'product')->name('products.show');
+
+                Route::put('products/{id}', 'updateProduct')->name('products.update');
+
+                Route::post('products/{id}/photos', 'uploadPhotos')->name('products.photos.store');
+
+                Route::delete('products/{id}/photos/{imageId}', 'removePhoto')->name('products.photos.destroy');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':inventory')->group(function () {
+                Route::get('inventory', 'inventory')->name('inventory.index');
+
+                Route::post('inventory/adjust', 'adjustStock')->name('inventory.adjust');
+
+                Route::get('stock-log', 'stockLog')->name('inventory.log');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':quotes')->group(function () {
+                Route::get('quotes', 'quotesList')->name('quotes.index');
+
+                Route::get('quotes/{id}', 'quoteDetail')->name('quotes.show');
+
+                Route::post('quotes/{id}/offer', 'sendOffer')->name('quotes.offer');
+
+                Route::post('quotes/{id}/reject', 'rejectQuote')->name('quotes.reject');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':enquiries')->group(function () {
+                Route::get('enquiries', 'enquiries')->name('enquiries.index');
+
+                Route::put('enquiries/{id}', 'updateEnquiry')->name('enquiries.update');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':staff')->group(function () {
+                Route::get('staff', 'staff')->name('staff.index');
+
+                Route::post('staff', 'storeStaff')->name('staff.store');
+
+                Route::put('staff/{id}', 'updateStaff')->name('staff.update');
+
+                Route::post('staff/{id}/toggle', 'toggleStaff')->name('staff.toggle');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':settings')->group(function () {
+                Route::get('settings', 'settings')->name('settings.show');
+
+                Route::put('settings', 'saveSettings')->name('settings.save');
+            });
         });
 
         Route::controller(DeskController::class)->group(function () {
@@ -197,6 +260,8 @@ Route::group([
             Route::get('', 'index')->name('index');
 
             Route::get('{id}', 'show')->name('show');
+
+            Route::get('{id}/invoice', 'invoice')->name('invoice');
 
             Route::post('{id}/cancel', 'cancel')->name('cancel');
         });

@@ -3,7 +3,9 @@
 namespace VK7\Wholesale\Services;
 
 use Illuminate\Support\Collection;
+use VK7\Wholesale\Models\Enquiry;
 use VK7\Wholesale\Models\Payment;
+use Webkul\B2BSuite\Models\CustomerQuote;
 use Webkul\Customer\Models\CustomerProxy;
 use Webkul\Sales\Models\OrderItemProxy;
 use Webkul\Sales\Models\OrderProxy;
@@ -18,7 +20,11 @@ class BusinessReport
     /**
      * Create a new service instance.
      */
-    public function __construct(protected OrderFinance $finance) {}
+    public function __construct(
+        protected OrderFinance $finance,
+        protected CatalogueDesk $catalogue,
+        protected StoreSettings $settings,
+    ) {}
 
     /**
      * The numbers on the owner's dashboard.
@@ -37,6 +43,9 @@ class BusinessReport
             'moneyToCollect' => round($live->sum('outstanding'), 2),
             'pendingRetailers' => $this->companyQuery()->where('status', 0)->where('is_suspended', 0)->count(),
             'readyToDispatch' => $rows->whereIn('stage', ['Confirmed', 'Packing'])->count(),
+            'openQuotes' => CustomerQuote::query()->where('status', CustomerQuote::STATUS_OPEN)->count(),
+            'newEnquiries' => Enquiry::query()->where('status', 'new')->where('type', '!=', 'retailer_application')->count(),
+            'lowStock' => $this->catalogue->lowStock($this->settings->lowStock()),
             'recent' => $rows->sortByDesc('id')->take(6)->values(),
         ];
     }

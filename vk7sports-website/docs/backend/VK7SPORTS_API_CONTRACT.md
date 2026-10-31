@@ -47,8 +47,7 @@ Validation errors return 422 with `{ "message": "...", "errors": { "field": ["..
 | My enquiries | `GET /enquiries/mine` |
 | Pay advance or balance | `POST /orders/{id}/payments`, `/payments/{paymentId}/confirm`, `/payments/reference` |
 | Account statement | `GET /account/statement` |
-| Staff business desk | `/admin/*`, see [Staff business desk](#staff-business-desk) |
-| Catalogue, quote offers, staff users | The Bagisto panel at `/admin` |
+| Single staff admin | `/admin/*`, see [Staff business desk](#staff-business-desk). Bagisto's panel is closed. |
 
 About, policy and other static pages need no backend. Their wording awaits the owner.
 
@@ -60,6 +59,9 @@ A token is optional here. With a valid token, the response includes that retaile
 
 ```json
 { "data": {
+  "company": { "legalName": "...", "address": "...", "gstin": "...", "phone": "...", "email": "..." },
+  "bank": null,
+  "payments": { "advance_percent": 10, "hold_hours": 48, "gateway": "demo" },
   "moq": { "enabled": true, "min_qty": 24, "mode": "per_style" },
   "prices_visible": false,
   "currency": "INR",
@@ -112,7 +114,7 @@ For visitors, `stock` and `prices` are `null`, and only `in_stock` is sent.
 
 ### `POST /auth/register`
 
-Required: `business_name`, `first_name`, `last_name`, `email`, `phone`, `password`, `password_confirmation`. Optional: `shop_type`, `gstin`, `proof`, and an address (`label`, `line1`, `city`, `state`, `pin`). Returns 201 with `{ "data": { "email": "...", "approval": "pending" } }`. Show "waiting for approval". The retailer cannot sign in until staff activate the account in `/admin`.
+Required: `business_name`, `first_name`, `last_name`, `email`, `phone`, `password`, `password_confirmation`. Optional: `shop_type`, `gstin`, `proof`, and an address (`label`, `line1`, `city`, `state`, `pin`). Returns 201 with `{ "data": { "email": "...", "approval": "pending" } }`. Show "waiting for approval". The retailer cannot sign in until staff approve the client in the admin.
 
 ### `POST /auth/login`
 
@@ -128,7 +130,7 @@ Error codes: `INVALID_CREDENTIALS` (401), `ACCOUNT_PENDING`, `EMAIL_NOT_VERIFIED
 
 ### `POST /enquiries`
 
-Required: `name`, `email`, `message`. Optional: `type` (from `enquiry_types`), `business_name`, `phone`, `city`, `quantity`, `product_id`. Returns 201. Sales sees it under Customers › Enquiries in `/admin`. Custom orders use this form with `type: "custom"`. There is no custom-order workflow yet.
+Required: `name`, `email`, `message`. Optional: `type` (from `enquiry_types`), `business_name`, `phone`, `city`, `quantity`, `product_id`. Returns 201. Sales sees it under Enquiries in the admin. Custom orders use this form with `type: "custom"`. There is no custom-order workflow yet.
 
 ## Retailer endpoints (token required)
 
@@ -196,7 +198,7 @@ Quote object:
   "messages": [{ "id": 1, "from": "customer", "message": "...", "created_at": "..." }] } }
 ```
 
-Status flow: `open` → `negotiation` → `accepted` → `ordered` → `completed`. A quote can also become `rejected` or `expired`. Staff send offers from `/admin`.
+Status flow: `open` → `negotiation` → `accepted` → `ordered` → `completed`. A quote can also become `rejected` or `expired`. Staff send offers from the admin.
 
 | Call | Body | Notes |
 |---|---|---|
@@ -252,6 +254,8 @@ Order detail and public tracking include `tracking`, or `null` before dispatch: 
 
 `POST /checkout/order` also accepts optional `po_ref` and `notes`.
 
+`GET /orders/{id}/invoice` returns the invoice with `company`, `bill_to`, `lines` and totals. It is a proforma until the advance is paid, then gets an `INV-` number once. `tax_invoice` stays false until the CA-approval setting is on.
+
 `GET /orders` (`?limit=&page=`) and `GET /orders/{id}`:
 
 ```json
@@ -267,7 +271,7 @@ Display `stage`, not `status`. `status` is Bagisto's own value, kept in step wit
 
 ## Staff business desk
 
-Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). Tokens last 12 hours and are refused on retailer routes, and the other way round. An account using two-factor sign-in gets `TWO_FACTOR_REQUIRED` and must use the panel: the desk has no second step yet. Each route needs an area from the role: `dashboard`, `retailers`, `orders`, `payments`, `dispatch`, `reports` or `audit`. A custom role grants them through the `vk7_desk.*` permissions in Bagisto's role screen; otherwise the route returns `FORBIDDEN`.
+Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). Tokens last 12 hours and are refused on retailer routes, and the other way round. An account using two-factor sign-in gets `TWO_FACTOR_REQUIRED` and must use the panel: the desk has no second step yet. Each route needs an area from the role: `dashboard`, `retailers`, `enquiries`, `quotes`, `orders`, `payments`, `dispatch`, `products`, `inventory`, `reports`, `staff`, `settings` or `audit`. A custom role grants them through the `vk7_desk.*` permissions in Bagisto's role screen; otherwise the route returns `FORBIDDEN`.
 
 | Area | Calls |
 |---|---|
@@ -279,6 +283,12 @@ Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). 
 | `payments` | `GET /admin/payments`, `POST /admin/payments/{id}/review` `{ accepted, reason }`, `POST /admin/orders/{id}/collection` `{ amount, method, reference }` |
 | `dispatch` | `GET /admin/dispatch`, `POST /admin/orders/{id}/stage` `{ stage: "Packing" }`, `POST /admin/orders/{id}/dispatch`, `POST /admin/shipments/{id}/refresh` |
 | `audit` | `GET /admin/activity` |
+| `products` | `GET`, `POST /admin/categories`, `GET`, `POST /admin/products`, `GET`, `PUT /admin/products/{id}`, `POST /admin/products/{id}/photos` (multipart: `colour`, `photos[]`), `DELETE /admin/products/{id}/photos/{imageId}` |
+| `inventory` | `GET /admin/inventory`, `POST /admin/inventory/adjust` `{ variant_id, change, reason, note }`, `GET /admin/stock-log` |
+| `quotes` | `GET /admin/quotes`, `GET /admin/quotes/{id}`, `POST /admin/quotes/{id}/offer` `{ prices: { itemId: price }, message }`, `POST /admin/quotes/{id}/reject` `{ reason }` |
+| `enquiries` | `GET /admin/enquiries`, `PUT /admin/enquiries/{id}` `{ status, note, follow_up_on }` |
+| `staff` | `GET`, `POST /admin/staff`, `PUT /admin/staff/{id}`, `POST /admin/staff/{id}/toggle` |
+| `settings` | `GET`, `PUT /admin/settings`: business rules, company details, bank details |
 
 ## Connecting from your app
 

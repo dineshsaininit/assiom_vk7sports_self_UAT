@@ -4,6 +4,7 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use VK7\Wholesale\Services\InvoiceDesk;
 use VK7\Wholesale\Services\OrderFinance;
 use VK7\Wholesale\Services\ShipmentDesk;
 use Webkul\Sales\Repositories\OrderRepository;
@@ -88,6 +89,23 @@ class OrderController extends Controller
                 'phone' => $address->phone,
             ] : null,
         ])]);
+    }
+
+    /**
+     * Return this retailer's invoice for an order.
+     */
+    public function invoice(InvoiceDesk $invoices, int $id): JsonResponse
+    {
+        $order = $this->orderRepository->find($id);
+
+        if (
+            ! $order
+            || ! in_array($order->customer_id, $this->buyerIds())
+        ) {
+            return $this->fail(trans('Order not found.'), 'NOT_FOUND', 404);
+        }
+
+        return response()->json(['data' => $invoices->build($order)]);
     }
 
     /**

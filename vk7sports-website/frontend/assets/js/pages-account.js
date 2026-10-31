@@ -1,7 +1,7 @@
 /* Retailer pages: order list, checkout, quotes, orders, account. */
 (function () {
-  const { api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap, payOnline } = VK7;
-  const CFG = window.VK7_CONFIG, PAY = CFG.payment;
+  const { invoiceDoc, api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap, payOnline } = VK7;
+  const PAY = window.VK7_CONFIG.payment;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
   const lineTable = (lines, priceKey = 'unitPrice') => html`<div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>
@@ -225,7 +225,7 @@
           <div class="card card-pad"><h3 class="mb">Delivery address</h3><p class="mb-0">${o.address.label}<br><span class="muted">${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}<br>${o.address.phone}</span></p>${o.poRef ? html`<p class="mt mb-0 small">Your reference: ${o.poRef}</p>` : ''}</div>
         </div>
         <div class="card card-pad"><h3 class="mb">History</h3>${timeline(o.history)}</div>
-        <div class="row"><a class="btn btn-line" href="proforma.html?id=${o.id}">Proforma</a>${o.type === 'standard' ? html`<button class="btn btn-line" data-reorder>Order again</button>` : ''}${o.status === 'Awaiting advance' && !o.paid && o.type === 'standard' ? html`<button class="btn btn-danger" data-cancel>Cancel order</button>` : ''}<a class="btn btn-ghost" href="contact.html">Need help?</a></div>
+        <div class="row"><a class="btn btn-line" href="invoice.html?id=${o.id}">View invoice</a>${o.type === 'standard' ? html`<button class="btn btn-line" data-reorder>Order again</button>` : ''}${o.status === 'Awaiting advance' && !o.paid && o.type === 'standard' ? html`<button class="btn btn-danger" data-cancel>Cancel order</button>` : ''}<a class="btn btn-ghost" href="contact.html">Need help?</a></div>
       </div>`;
       const pf = main.querySelector('#payform');
       if (pf) onSubmit(pf, async v => { await api.orders.submitPayment(id, { ...v, kind: pf.dataset.kind }); toast('Reference submitted'); await render(); });
@@ -241,17 +241,10 @@
     await render();
   });
 
-  page('proforma', { layout: 'public', access: 'retailer' }, async main => {
-    const o = await api.orders.get(param('id'));
-    const C = CFG.contact;
-    main.innerHTML = html`<div class="wrap"><div class="row no-print" style="padding-top:16px"><button class="btn btn-navy" onclick="window.print()">Print or save as PDF</button><a class="btn btn-line" href="account-order.html?id=${o.id}">Back to order</a></div>
-    <div class="doc"><div class="not-invoice">PROFORMA: NOT A TAX INVOICE${CFG.demoMode ? ' · DEMO' : ''}</div>
-      <div class="doc-head"><div><img src="assets/img/brand/logo-navy.png" alt="VK7SPORTS"><p class="small muted mb-0" style="margin-top:8px">${C.legalName || tbc('Legal name to be confirmed')}<br>${C.address || tbc('Address to be confirmed')}<br>GSTIN: ${C.gstin || tbc()}</p></div>
-        <div class="right"><h2 style="font-size:20px">Proforma</h2><div class="mono">${o.number}</div><div class="small muted">${date(o.createdAt)}</div></div></div>
-      <div class="two mb"><div><div class="small muted">Bill to</div><strong>${o.company}</strong><br>${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}</div><div><div class="small muted">Status</div>${o.status}${o.poRef ? html`<div class="small muted mt">Your reference</div>${o.poRef}` : ''}</div></div>
-      ${lineTable(o.lines)}
-      <div class="sum mt" style="max-width:320px;margin-left:auto"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div>${o.advancePct != null ? html`<div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance</span><span>${money(o.outstanding)}</span></div>` : ''}</div>
-      <p class="small muted mt-l mb-0">GST and tax invoice format to be confirmed by the chartered accountant.</p></div></div>`;
+  page('invoice', { layout: 'public', access: 'retailer' }, async main => {
+    const id = param('id'), i = await api.orders.invoice(id);
+    main.innerHTML = html`<div class="wrap"><div class="row no-print" style="padding-top:16px"><button class="btn btn-navy" data-print>Print or save as PDF</button><a class="btn btn-line" href="account-order.html?id=${id}">Back to order</a></div>${invoiceDoc(i)}</div>`;
+    on(main, '[data-print]', () => window.print());
   });
 
   /* ---------- Quotes ---------- */
@@ -337,7 +330,7 @@
     };
     const save = async v => { await api.account.saveAddress(v); toast('Address saved'); await render(); };
     on(main, '[data-add]', () => modal('Add address', form({}), save));
-    on(main, '[data-edit]', el => modal('Edit address', form(main._addresses.find(a => a.id === el.dataset.edit)), save));
+    on(main, '[data-edit]', el => modal('Edit address', form(main._addresses.find(a => String(a.id) === el.dataset.edit)), save));
     on(main, '[data-default]', el => act(() => api.account.defaultAddress(el.dataset.default), 'Default address updated').then(render));
     on(main, '[data-del]', el => confirmBox('Delete address', 'This address will be removed.', 'Delete', async () => { await api.account.deleteAddress(el.dataset.del); await render(); }, true));
     await render();

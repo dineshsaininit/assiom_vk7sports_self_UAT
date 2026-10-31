@@ -23,14 +23,14 @@
       <div class="fact">${icon('file', 22)}<div><strong>Quotes for larger orders</strong><span>Reply within one working day</span></div></div>
       <div class="fact">${icon('truck', 22)}<div><strong>Track every order</strong><span>From advance to delivery</span></div></div>
     </div></section>
-    <section class="sec"><div class="wrap">
+    ${products.length ? html`<section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>Shop by category</h2></div><a class="link" href="catalogue.html">View all products</a></div>
       <div class="cat-grid">${cats.map(c => html`<a class="cat" href="catalogue.html?category=${c.id}"><img src="${c.image}" alt="" loading="lazy"><span>${c.name}</span></a>`)}</div>
     </div></section>
     <section class="sec sec-alt"><div class="wrap">
       <div class="sec-head"><div><h2>In the range now</h2><p>Trade prices appear once your account is approved.</p></div></div>
       <div class="pgrid">${products.slice(0, 4).map(p => productCard(p, me))}</div>
-    </div></section>
+    </div></section>` : ''}
     <section class="sec"><div class="wrap">
       <div class="sec-head"><div><h2>How ordering works</h2><p>Four steps from sign-up to delivery.</p></div><a class="link" href="how-it-works.html">See the full process</a></div>
       <div class="steps">
@@ -73,7 +73,7 @@
       <div class="wrap"><div class="cat-layout">
         <aside class="filters" id="filters" aria-label="Filters">
           ${group('Category', 'category', cats.map(c => [c.id, c.name]))}
-          ${group('For', 'gender', facets.genders.map(g => [g, g]))}
+          ${facets.genders.length ? group('For', 'gender', facets.genders.map(g => [g, g])) : ''}
           ${group('Colour', 'colour', facets.colours.map(c => [c.name, c.name, c.hex]))}
           ${group('Size', 'size', facets.sizes.map(s => [s, s]))}
           <div class="filter-group"><h4>Other</h4>
@@ -180,8 +180,8 @@
           ${orderPanel}
           <div class="card card-pad"><h3 class="mb" style="margin-bottom:8px">Details</h3><p class="muted">${p.description}</p>
             <dl class="spec">
-              <dt>Category</dt><dd>${cat ? cat.name : ''}</dd><dt>For</dt><dd>${p.gender}</dd><dt>Sizes</dt><dd>${p.sizes.join(', ')}</dd>
-              <dt>Features</dt><dd>${p.features.join(', ')}</dd><dt>Fabric</dt><dd>${tbc()}</dd><dt>Size chart</dt><dd>${tbc()}</dd>
+              <dt>Category</dt><dd>${cat ? cat.name : ''}</dd><dt>Sizes</dt><dd>${p.sizes.join(', ')}</dd>
+              
               <dt>Customisation</dt><dd>${p.customisable ? html`Available. <a class="link" href="custom-orders.html?style=${p.id}">Send a customised enquiry</a>` : 'Not offered on this style'}</dd>
             </dl></div>
         </div>
@@ -348,16 +348,14 @@
           <div class="form-2">${field('city', 'City', { required: true })}${field('email', 'Email', { type: 'email' })}</div>
           <div class="form-2">${field('styleId', 'Base style', { type: 'select', value: param('style') || '', options: [['', 'Not sure yet'], ...list.map(p => [p.id, p.name])] })}${field('quantity', 'Approximate quantity', { type: 'select', required: true, options: [['', 'Select'], ...QTY] })}</div>
           ${field('message', 'Describe your design', { type: 'textarea', required: true, placeholder: 'Logo position, colours, names and numbers' })}
-          <div class="field"><label for="art">Logo or artwork (optional)</label><input class="input" id="art" name="artwork" type="file" accept=".png,.jpg,.jpeg,.pdf,.ai,.cdr,.svg"><span class="hint">PDF, AI, CDR or a high-quality PNG works best. A phone photo of a logo may not print well. In this demo the file is not uploaded.</span></div>
+          <p class="hint mb-0">Keep your logo file ready, ideally PDF, AI, CDR or a high-quality PNG. We will ask for it after we contact you.</p>
           ${checkbox('rightsOk', 'I confirm that I own, or have permission to use, the logos and artwork I am sharing.')}
           <button class="btn btn-red" type="submit">Send enquiry</button>
         </form></div>
         <div class="card card-pad"><h3 class="mb">Good to know</h3><ul class="ticks"><li>Minimum about ${S.customMoq} pieces per design</li><li>About ${S.customAdvancePct}% advance after artwork approval</li><li>Balance before dispatch</li><li>Production starts only after artwork and advance are both done</li></ul><img src="assets/img/products/tee-mint-tag.jpg" alt="VK7 logo and tags on a Performance Crew Tee" style="border-radius:8px" loading="lazy"></div>
       </div></div></section>`;
     onSubmit(main.querySelector('form'), async v => {
-      const file = main.querySelector('#art').files[0];
-      const { artwork, ...rest } = v;
-      enquiryDone(main.querySelector('#box'), await api.enquiries.create({ ...rest, type: 'custom', artworkName: file ? file.name : null }), 'customised order enquiry');
+      enquiryDone(main.querySelector('#box'), await api.enquiries.create({ ...v, type: 'custom' }), 'customised order enquiry');
     });
   });
 
@@ -399,10 +397,6 @@
   });
 
   /* ---------- Auth ---------- */
-  const DEMO = [['alpha@example.test', 'Approved retailer'], ['bravo@example.test', 'Retailer awaiting approval']];
-  const STAFF_DEMO = [['owner@example.test', 'Owner'], ['admin@example.test', 'Administrator'], ['sales@example.test', 'Sales'], ['inventory@example.test', 'Inventory'], ['warehouse@example.test', 'Warehouse'], ['finance@example.test', 'Finance']];
-  const demoLogins = list => CFG.demoMode ? html`<div class="mt-l"><p class="small muted" style="margin-bottom:6px">Demo sign-ins (password Demo@123)</p><div class="demo-logins">${list.map(d => html`<button type="button" data-login="${d[0]}"><span>${d[1]}</span><span class="muted">${d[0]}</span></button>`)}</div></div>` : '';
-  const wireDemo = (main, form) => on(main, '[data-login]', el => { form.email.value = el.dataset.login; form.password.value = 'Demo@123'; form.requestSubmit(); });
   const safeNext = v => (v && /^[a-z0-9-]+\.html(\?[^/]*)?$/i.test(v)) ? v : null;
 
   page('login', { layout: 'public' }, async (main, { me }) => {
@@ -414,14 +408,12 @@
         <div class="row between"><span></span><a class="link small" href="forgot-password.html">Forgot password?</a></div>
         <button class="btn btn-red btn-block" type="submit">Sign in</button>
       </form>
-      <p class="center mt-l mb-0">New to VK7SPORTS? <a class="link" href="register.html">Apply for a trade account</a></p>
-      ${demoLogins(DEMO)}</div></div>`;
+      <p class="center mt-l mb-0">New to VK7SPORTS? <a class="link" href="register.html">Apply for a trade account</a></p></div></div>`;
     const form = main.querySelector('form');
     onSubmit(form, async v => {
       await api.auth.login(v);
       location.href = safeNext(param('next')) || 'account.html';
     });
-    wireDemo(main, form);
   });
 
   page('register', { layout: 'public' }, async (main, { me }) => {
@@ -468,10 +460,9 @@
       <img src="assets/img/brand/logo-navy.png" alt="VK7SPORTS" style="height:34px;margin-bottom:18px">
       <h1 style="font-size:22px">Staff sign-in</h1><p class="muted">For VK7SPORTS staff only.</p>
       <form class="form" novalidate>${field('email', 'Work email', { type: 'email', required: true, autocomplete: 'username' })}${field('password', 'Password', { type: 'password', required: true, autocomplete: 'current-password' })}<button class="btn btn-navy btn-block" type="submit">Sign in</button></form>
-      ${demoLogins(STAFF_DEMO)}<p class="center mt-l mb-0"><a class="link" href="index.html">Back to website</a></p></div></div>`;
+      <p class="center mt-l mb-0"><a class="link" href="index.html">Back to website</a></p></div></div>`;
     const form = main.querySelector('form');
     onSubmit(form, async v => { await api.auth.staffLogin(v); location.href = 'admin.html'; });
-    wireDemo(main, form);
   });
 
   page('not-found', { layout: 'public' }, async main => {

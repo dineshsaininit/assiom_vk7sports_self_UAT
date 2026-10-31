@@ -38,7 +38,7 @@ class DemoData extends Command
      *
      * @var string
      */
-    protected $description = 'Create fictional DEMO products with size and colour variants for development';
+    protected $description = 'Create fictional products with size and colour variants for the automated tests';
 
     /**
      * Create a new command instance.
@@ -57,8 +57,8 @@ class DemoData extends Command
      */
     public function handle(): int
     {
-        if (app()->isProduction()) {
-            $this->components->error('Demo data is not allowed in production.');
+        if (! app()->environment('testing')) {
+            $this->components->error('Fictional data is only for the automated tests.');
 
             return self::FAILURE;
         }

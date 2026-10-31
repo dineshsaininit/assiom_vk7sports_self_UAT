@@ -21,6 +21,11 @@ return [
         ],
     ],
 
+    'admin' => [
+        'url' => env('VK7_ADMIN_URL', 'http://127.0.0.1:8080/admin-login.html'),
+        'close_bagisto_panel' => (bool) env('VK7_CLOSE_BAGISTO_ADMIN', true),
+    ],
+
     'courier' => [
         'provider' => env('VK7_COURIER', 'demo'),
         'providers' => [

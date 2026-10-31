@@ -53,7 +53,7 @@
   const STATUS_TONE = {
     'Paid in full': 'ok', Delivered: 'ok', Confirmed: 'ok', Approved: 'ok', approved: 'ok', verified: 'ok', Accepted: 'ok', Ordered: 'ok', Won: 'ok', 'Production authorised': 'ok', 'Artwork approved': 'ok', Active: 'ok',
     'Awaiting advance': 'warn', 'Awaiting balance': 'warn', 'Quote ready': 'warn', 'Artwork awaiting approval': 'warn', pending: 'warn', Pending: 'warn', submitted: 'warn', 'On hold': 'warn', 'In follow-up': 'warn', Quoted: 'warn',
-    Cancelled: 'bad', Expired: 'bad', rejected: 'bad', Rejected: 'bad', Declined: 'bad', suspended: 'bad', Suspended: 'bad', Lost: 'bad', Inactive: 'bad',
+    Closed: 'mute', Cancelled: 'bad', Expired: 'bad', rejected: 'bad', Rejected: 'bad', Declined: 'bad', suspended: 'bad', Suspended: 'bad', Lost: 'bad', Inactive: 'bad',
     New: 'info', 'Quote requested': 'info', Packing: 'info', Dispatched: 'info', 'In production': 'info', 'Partly dispatched': 'info'
   };
   const LABEL = { approved: 'Approved', pending: 'Awaiting approval', rejected: 'Rejected', suspended: 'Suspended', verified: 'Verified', submitted: 'To verify' };
@@ -154,6 +154,20 @@
       try { await finish({ simulated_result: b.dataset.sim }); box.close(); }
       catch (e) { toast(e.message, true); b.disabled = false; }
     }; });
+  };
+
+  /* --- Invoice with the company's logo and details --- */
+  const invoiceDoc = i => {
+    const c = i.company, title = i.proforma ? 'Proforma invoice' : i.tax_invoice ? 'Tax invoice' : 'Invoice', b = i.bill_to;
+    return html`<div class="doc">
+      ${i.tax_invoice && !i.proforma ? '' : html`<div class="not-invoice">${i.proforma ? 'PROFORMA: NOT A TAX INVOICE' : 'NOT A TAX INVOICE'}</div>`}
+      <div class="doc-head"><div><img src="assets/img/brand/logo-navy.png" alt="VK7SPORTS">
+        <p class="small mb-0" style="margin-top:10px"><strong>${c.legalName || tbc('Legal name to be confirmed')}</strong><br>${c.address || tbc('Address to be confirmed')}<br>GSTIN: ${c.gstin || tbc()}${c.phone ? html`<br>${c.phone}` : ''}${c.email ? html`<br>${c.email}` : ''}</p></div>
+        <div class="right"><h2 style="font-size:20px">${title}</h2><div class="mono">${i.number}</div><div class="small muted">${date(i.issued_at)}</div><div class="small muted">Order ${i.order_number}</div></div></div>
+      <div class="two mb"><div><div class="small muted">Bill to</div><strong>${b.name}</strong><br>${b.address || ''}${b.city ? html`<br>${b.city}, ${b.state} ${b.pin}` : ''}${b.phone ? html`<br>${b.phone}` : ''}${b.gstin ? html`<br>GSTIN: ${b.gstin}` : ''}</div><div><div class="small muted">Status</div>${i.status}</div></div>
+      <div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>${i.lines.map(l => html`<tr><td><strong>${l.name}</strong><div class="small muted mono">${l.sku}</div></td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.price)}</td><td class="num">${money(l.total)}</td></tr>`)}</tbody></table></div>
+      <div class="sum mt" style="max-width:320px;margin-left:auto"><div><span>Subtotal</span><span>${money(i.sub_total)}</span></div>${i.shipping ? html`<div><span>Delivery</span><span>${money(i.shipping)}</span></div>` : ''}${i.tax ? html`<div><span>Tax</span><span>${money(i.tax)}</span></div>` : ''}<div class="tot"><span>Total</span><span>${money(i.total)}</span></div><div><span>Paid</span><span>${money(i.paid)}</span></div><div><strong>Balance due</strong><strong>${money(i.outstanding)}</strong></div></div>
+    </div>`;
   };
 
   /* --- Size x colour grid. Returns markup; wire with bindGrid() --- */
@@ -286,12 +300,10 @@
   const here = () => (location.pathname.split('/').pop() || 'index.html');
   const current = href => here() === href ? raw('aria-current="page"') : '';
 
-  const demoStrip = () => CFG.demoMode ? html`<div class="demo-strip no-print">Demo version: prices, stock and orders are sample data, and no real payment is taken. <button type="button" data-reset>Reset demo</button></div>` : '';
 
   const header = me => {
     const account = !me ? ['Sign in', 'login.html'] : me.kind === 'staff' ? ['Staff area', 'admin.html'] : ['My account', 'account.html'];
     return html`
-    ${demoStrip()}
     <header class="hdr no-print"><div class="wrap hdr-in">
       <button class="tool burger" type="button" aria-label="Open menu" data-open-menu>${icon('menu', 22)}</button>
       <a class="logo" href="index.html" aria-label="VK7SPORTS home"><img src="assets/img/brand/logo-white.png" alt="VK7SPORTS, sportswear for champions" width="179" height="34"></a>
@@ -325,9 +337,6 @@
       if (e.target.closest('[data-open-menu]')) document.body.classList.add('drawer-open');
       if (e.target.closest('[data-close-menu]')) document.body.classList.remove('drawer-open');
       if (e.target.closest('[data-open-a]')) document.body.classList.toggle('a-open');
-      if (e.target.closest('[data-reset]')) {
-        confirmBox('Reset demo', 'This clears everything entered in this browser and restores the sample data.', 'Reset demo', async () => { await api.demoReset(); location.href = 'index.html'; }, true);
-      }
     });
   };
 
@@ -374,7 +383,7 @@
     const skip = raw('<a class="skip" href="#main">Skip to content</a>');
     if (def.layout === 'admin') {
       const perm = def.access.split(':')[1];
-      app.innerHTML = html`${skip}${demoStrip()}<div class="a-shell">
+      app.innerHTML = html`${skip}<div class="a-shell">
         <aside class="a-side no-print"><a class="logo" href="admin.html"><img src="assets/img/brand/logo-white.png" alt="VK7SPORTS"></a><nav aria-label="Staff" data-anav>${ADMIN_SIDE.map(g => {
           const items = g[1].filter(i => me.perms.includes(i[3]));
           return items.length ? html`<div class="grp">${g[0]}</div>${items.map(i => html`<a href="${i[1]}" ${current(i[1])}>${icon(i[2])}<span>${i[0]}</span>${i[4] ? html`<span class="count-pill" data-count="${i[4]}" hidden></span>` : ''}</a>`)}` : '';
@@ -413,5 +422,5 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 
-  Object.assign(VK7, { trackingPanel, mountMap, payOnline, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
+  Object.assign(VK7, { invoiceDoc, trackingPanel, mountMap, payOnline, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
 })();

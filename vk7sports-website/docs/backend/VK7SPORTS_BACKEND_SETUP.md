@@ -1,6 +1,6 @@
 # VK7SPORTS Backend Setup
 
-How to run the backend on a Windows machine without Docker, as used on 31 October 2026. The app is in `backend/app`. Linux and Mac are the same apart from the install commands. Docker files also exist in `backend/docker`, but they were not used here.
+How to run the backend on a Windows machine without Docker. The database is PostgreSQL 17 (Neon in real use; see [NEON_SETUP.md](../database/NEON_SETUP.md)). The app is in `backend/app`. Linux and Mac are the same apart from the install commands. Docker files also exist in `backend/docker`, but they were not used here.
 
 ## Before you start
 
@@ -10,19 +10,17 @@ How to run the backend on a Windows machine without Docker, as used on 31 Octobe
 
 ## 1. Tools
 
-PHP 8.4, Composer 2, MySQL 8, Node 20 or later.
+PHP 8.4, Composer 2, PostgreSQL 17 or a Neon database, Node 20 or later.
 
 ```bash
 winget install --id PHP.PHP.NTS.8.4 -e
 ```
 
 ```bash
-winget install --id Oracle.MySQL -e
+winget install --id PostgreSQL.PostgreSQL.17 -e
 ```
 
-Create a `php.ini` beside `php.exe` from `php.ini-development`. Set `extension_dir = "ext"` and `memory_limit = 2G`, and enable: `curl fileinfo gd intl mbstring openssl pdo_mysql exif zip sockets sodium`.
-
-Winget installs MySQL 8.4. The project pins 8.0.46, so results on 8.4 are not the pinned configuration.
+Create a `php.ini` beside `php.exe` from `php.ini-development`. Set `extension_dir = "ext"` and `memory_limit = 2G`, and enable: `curl fileinfo gd intl mbstring openssl pdo_pgsql pgsql exif zip sockets sodium`.
 
 ## 2. Code and settings
 
@@ -36,7 +34,7 @@ composer install --no-scripts
 cp .env.example .env
 ```
 
-In `.env`, set `APP_NAME=VK7SPORTS`, `APP_URL=http://127.0.0.1:8000`, `APP_CURRENCY=INR`, `MAIL_MAILER=log`, and your `DB_*` values. Create an empty database, then:
+In `.env`, set `APP_NAME=VK7SPORTS`, `APP_URL=http://127.0.0.1:8000`, `APP_CURRENCY=INR`, `MAIL_MAILER=log`, `DB_CONNECTION=pgsql`, your `DB_*` values, and `DB_SSLMODE=require` for Neon. Create an empty database, then:
 
 ```bash
 mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs storage/app/public
@@ -69,19 +67,12 @@ php artisan migrate --force
 ```
 
 ```bash
-php artisan vk7:apply-policy
+php artisan vk7:setup --owner-email=you@yourcompany.com --owner-name="Your Name"
 ```
 
-```bash
-php artisan vk7:demo-data
-```
-
-- `vk7:apply-policy` writes the planning defaults (24 per style, hidden guest prices, company approval, 7-day quotes, offline payment). **Without it the minimum is off**, and the rest of the rules fall back to their defaults.
-- `vk7:apply-policy` clears the cache, because settings are cached. If you change `core_config` directly, run `php artisan cache:clear`, or the old values stay in use.
-- `vk7:demo-data` creates 4 fictional categories and styles with 32 variants. It refuses to run in production.
-- `php artisan vk7:demo-catalogue` creates the 5 sample VK7 styles with the supplied photos from `frontend/assets/img/products`. Pass `--images=<folder>` if the app runs from another location. Names, prices and stock are placeholders. Use one of the two commands, or the catalogue shows both.
-
-**Change the admin password straight away.** The installer creates `admin@example.com` with an upstream default password.
+- `vk7:setup` writes the planning defaults (24 per style, hidden guest prices, company approval, 7-day quotes, 10% advance, 48-hour hold), creates the Sales, Inventory, Warehouse and Finance roles, and sets the owner sign-in. It prints the password once and replaces the installer's public default.
+- The store starts empty. Add real products in the admin.
+- If you change `core_config` directly, run `php artisan cache:clear`, or the old values stay in use.
 
 ## 4. Build the admin and shop assets
 
@@ -101,15 +92,13 @@ cd packages/Webkul/Admin && npm install && npm run build
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-API: `http://127.0.0.1:8000/api/v1/meta`. Admin: `http://127.0.0.1:8000/admin`.
+API: `http://127.0.0.1:8000/api/v1/meta`. The admin is `admin-login.html` on the website. Bagisto's `/admin` redirects there; to reach it for emergency work, set `VK7_CLOSE_BAGISTO_ADMIN=false`.
 
 Serve the website from the `frontend` folder and open `http://127.0.0.1:8080`:
 
 ```bash
 php -S 127.0.0.1:8080 -t .
 ```
-
-To approve a retailer, activate the company in the B2B Companies screen in admin. To send an offer, use the B2B quote screens. Their routes are covered by automated tests; the screens have not been clicked through in a browser yet.
 
 CORS currently allows any origin in `config/cors.php`. That is safe for token calls in development. Restrict it to the frontend's address before any deployment.
 
@@ -130,13 +119,13 @@ The `demo` gateway refuses to run when `APP_ENV=production`, because a simulated
 
 **To add a courier:** implement `CourierProvider` (`book` and `track`) in `packages/VK7/Wholesale/src/Couriers`, add it to `Config/vk7.php`, and set `VK7_COURIER`. `DelhiveryCourier` is the empty slot for this: it reports "not connected" until written against a real account. Use `Delivered` as the final scan status so the order moves on. A real courier also needs its scans fetched on a schedule, or from its webhook, through `ShipmentDesk::refresh`.
 
-Terms are in Configure › VK7 Wholesale › Payment Terms. A change applies to new orders only.
+Terms are in the admin's Settings page. A change applies to new orders only.
 
 ## 7. Tests
 
 Tests need their own database. Create `vk7_test`, then copy `.env` to `.env.testing` and change `DB_DATABASE=vk7_test` and `APP_ENV=testing`.
 
-Install into it by pointing `.env` at it temporarily. Run the commands in section 3 up to `migrate`, then **put `.env` back**. Do not run `vk7:apply-policy` or `vk7:demo-data` here: the tests run both themselves and roll them back.
+Install into it by pointing `.env` at it temporarily. Run the commands in section 3 up to `migrate`, then **put `.env` back**. Do not run `vk7:setup` here: the tests apply the rules and their own fictional data themselves, and roll both back. Never point the tests at Neon.
 
 ```bash
 php vendor/bin/pest --testsuite="VK7 Feature Test" --no-coverage

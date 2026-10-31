@@ -4,6 +4,7 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use VK7\Wholesale\Services\StoreSettings;
 use Webkul\Category\Repositories\CategoryRepository;
 use Webkul\Product\Repositories\ProductRepository;
 
@@ -20,9 +21,11 @@ class CatalogController extends Controller
     /**
      * Return the settings the frontend shapes its screens around.
      */
-    public function meta(): JsonResponse
+    public function meta(StoreSettings $settings): JsonResponse
     {
         return response()->json(['data' => [
+            'company' => $settings->company(),
+            'bank' => $this->customer() ? $settings->bank() : null,
             'moq' => [
                 'enabled' => (bool) core()->getConfigData('vk7.moq.settings.enabled'),
                 'min_qty' => (int) core()->getConfigData('vk7.moq.settings.min_qty'),
