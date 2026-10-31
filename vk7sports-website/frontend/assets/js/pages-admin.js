@@ -1,0 +1,333 @@
+/* Staff back office. Labels use plain business words; each screen is limited by role. */
+(function () {
+  const { api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page } = VK7;
+  const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
+  const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
+  const rowLinks = main => on(main, '[data-href]', (el, e) => { if (!e.target.closest('a,button')) location.href = el.dataset.href; });
+  const tableSearch = (main, render) => {
+    on(main, '[data-q]', () => render(), 'input');
+    on(main, '[data-s]', () => render(), 'change');
+  };
+  const filterBar = (placeholder, statuses) => html`<div class="filterbar"><label class="sr" for="tq">Search</label><input id="tq" class="input" data-q type="search" placeholder="${placeholder}"><label class="sr" for="ts">Status</label><select id="ts" class="input" data-s><option value="">All statuses</option>${statuses.map(s => html`<option>${s}</option>`)}</select></div>`;
+  const listing = (main, head, bar, rows, emptyEl) => {
+    main.innerHTML = html`${head}<div class="card">${bar}<div data-rows></div></div>`;
+    const box = main.querySelector('[data-rows]');
+    const render = () => {
+      const q = (main.querySelector('[data-q]')?.value || '').toLowerCase();
+      const s = main.querySelector('[data-s]')?.value || '';
+      box.innerHTML = rows(q, s) || emptyEl;
+    };
+    tableSearch(main, render); rowLinks(main); render();
+    return render;
+  };
+
+  /* ---------- Dashboard ---------- */
+  page('admin', { layout: 'admin', access: 'staff:dashboard' }, async (main, { me }) => {
+    const d = await api.admin.dashboard();
+    const can = p => me.perms.includes(p);
+    const tile = (label, value, href, note, perm) => !perm || can(perm) ? html`<a class="stat" href="${href}"><span>${label}</span><strong>${value}</strong>${note ? html`<em>${note}</em>` : ''}</a>` : '';
+    main.innerHTML = html`${title('Dashboard', 'What needs attention today.')}
+      <div class="stack">
+        <div class="tiles">
+          ${tile('Orders today', d.ordersToday, 'admin-orders.html', d.openOrders + ' open in total', 'orders')}
+          ${tile('Payments to verify', d.awaitingVerification, 'admin-payments.html', d.awaitingAdvance + ' awaiting advance', 'payments')}
+          ${tile('Money to collect', money(d.moneyToCollect), 'admin-reports.html', null, 'reports')}
+          ${tile('Retailers to approve', d.pendingRetailers, 'admin-retailers.html', null, 'retailers')}
+          ${tile('Quotes to answer', d.openQuotes, 'admin-quotes.html', null, 'quotes')}
+          ${tile('New enquiries', d.newEnquiries, 'admin-enquiries.html', null, 'enquiries')}
+          ${tile('Ready to dispatch', d.readyToDispatch, 'admin-dispatch.html', null, 'dispatch')}
+          ${tile('Low stock sizes', d.lowStockCount, 'admin-inventory.html', null, 'inventory')}
+        </div>
+        <div class="two">
+          ${can('orders') ? html`<div class="card"><div class="card-head"><h3>Latest orders</h3><a class="link small" href="admin-orders.html">View all</a></div><div class="tw"><table class="t"><tbody>${d.recent.map(o => html`<tr class="click" data-href="admin-order.html?id=${o.id}"><td><a class="mono small" href="admin-order.html?id=${o.id}">${o.number}</a><div class="small muted">${o.company}</div></td><td>${badge(o.status)}</td><td class="num">${money(o.subtotal)}</td></tr>`)}</tbody></table></div></div>` : ''}
+          ${can('inventory') ? html`<div class="card"><div class="card-head"><h3>Low stock</h3><a class="link small" href="admin-inventory.html">Open inventory</a></div>${d.lowStock.length ? html`<div class="tw"><table class="t"><tbody>${d.lowStock.map(l => html`<tr><td>${l.product}<div class="small muted">${l.variant}</div></td><td class="num"><span class="badge ${l.available ? 'b-warn' : 'b-bad'}">${l.available ? l.available + ' left' : 'Out of stock'}</span></td></tr>`)}</tbody></table></div>` : empty('Stock looks healthy', 'Nothing is below the low-stock level.', null, 'check')}</div>` : ''}
+        </div>
+      </div>`;
+    rowLinks(main);
+  });
+
+  /* ---------- Retailers ---------- */
+  page('admin-retailers', { layout: 'admin', access: 'staff:retailers' }, async main => {
+    const list = (await api.admin.retailers()).sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
+    listing(main, title('Retailers', 'Approve new shops and manage trade accounts.'), filterBar('Search shop, city or email', ['pending', 'approved', 'rejected', 'suspended']), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.company, x.city, x.email, x.contact].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Shop</th><th>City</th><th>Applied</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>${r.map(x => html`<tr class="click" data-href="admin-retailer.html?id=${x.id}"><td><a href="admin-retailer.html?id=${x.id}"><strong>${x.company}</strong></a><div class="small muted">${x.contact}</div></td><td>${x.city}</td><td>${date(x.appliedAt)}</td><td class="num">${x.orders}</td><td class="num">${money(x.outstanding)}</td><td>${badge(x.status)}</td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No retailers found', 'Try a different search.', null, 'users'));
+  });
+
+  page('admin-retailer', { layout: 'admin', access: 'staff:retailers' }, async (main, { me }) => {
+    const id = param('id');
+    const can = ['Owner', 'Sales', 'Administrator'].includes(me.role);
+    const render = async () => {
+      const r = await api.admin.retailer(id);
+      main.innerHTML = html`<a class="link small" href="admin-retailers.html">Back to retailers</a>
+      ${title(r.company, r.city + ', ' + r.state, badge(r.status))}
+      <div class="stack">
+        ${r.status === 'pending' && can ? html`<div class="card card-pad"><h3 class="mb">Review this application</h3><ul class="ticks"><li>Check the shop name and address</li><li>Check the GSTIN or other proof</li><li>Call the mobile number to confirm</li></ul><div class="row"><button class="btn btn-red" data-decide="approved">Approve retailer</button><button class="btn btn-danger" data-decide="rejected">Reject</button></div></div>` : ''}
+        ${r.status === 'approved' && can ? html`<div class="row"><button class="btn btn-danger btn-sm" data-decide="suspended">Suspend account</button></div>` : ''}
+        ${r.status === 'suspended' && can ? html`<div class="row"><button class="btn btn-red btn-sm" data-decide="approved">Reactivate account</button></div>` : ''}
+        ${r.rejectReason ? notice('warn', 'Reason recorded', r.rejectReason) : ''}
+        <div class="two"><div class="card card-pad"><h3 class="mb">Business</h3><dl class="kv"><dt>Type</dt><dd>${r.shopType}</dd><dt>GSTIN</dt><dd>${r.gstin || '-'}</dd><dt>Proof</dt><dd>${r.proof}</dd><dt>Price list</dt><dd>${r.priceList}</dd><dt>Applied</dt><dd>${date(r.appliedAt)}</dd></dl></div>
+        <div class="card card-pad"><h3 class="mb">Contact</h3><dl class="kv"><dt>Person</dt><dd>${r.contact}</dd><dt>Mobile</dt><dd>${r.phone}</dd><dt>Email</dt><dd>${r.email}</dd><dt>Address</dt><dd>${r.addresses[0].line1}, ${r.addresses[0].city} ${r.addresses[0].pin}</dd></dl></div></div>
+        <div class="card"><div class="card-head"><h3>Orders</h3><span class="small muted">Balance ${money(r.statement.balance)}</span></div>${r.orders.length ? html`<div class="tw"><table class="t"><tbody>${r.orders.map(o => html`<tr class="click" data-href="admin-order.html?id=${o.id}"><td class="mono">${o.number}</td><td>${date(o.createdAt)}</td><td>${badge(o.status)}</td><td class="num">${money(o.subtotal)}</td></tr>`)}</tbody></table></div>` : empty('No orders yet', 'Orders from this retailer will show here.')}</div>
+      </div>`;
+    };
+    on(main, '[data-decide]', el => {
+      const d = el.dataset.decide;
+      if (d === 'approved') confirmBox('Approve this retailer?', 'They will be able to see trade prices and place orders.', 'Approve', async () => { await api.admin.decideRetailer(id, { decision: d }); toast('Retailer approved'); await render(); });
+      else reasonBox(d === 'rejected' ? 'Reject application' : 'Suspend account', 'This reason is saved in the activity log.', d === 'rejected' ? 'Reject' : 'Suspend', async reason => { await api.admin.decideRetailer(id, { decision: d, reason }); toast('Saved'); await render(); });
+    });
+    rowLinks(main);
+    await render();
+  });
+
+  /* ---------- Enquiries ---------- */
+  const ENQ = ['New', 'In follow-up', 'Quoted', 'Won', 'Lost'];
+  page('admin-enquiries', { layout: 'admin', access: 'staff:enquiries' }, async main => {
+    let list = await api.admin.enquiries();
+    const render = listing(main, title('Enquiries', 'Bulk, customised and contact-form messages.'), filterBar('Search name, organisation or city', ENQ), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.name, x.organisation, x.city, x.number].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Reference</th><th>From</th><th>Type</th><th>Quantity</th><th>Follow up</th><th>Status</th><th></th></tr></thead><tbody>${r.map(x => html`<tr><td class="mono small">${x.number}<div class="muted">${date(x.createdAt)}</div></td><td><strong>${x.organisation}</strong><div class="small muted">${x.name}, ${x.city}</div></td><td>${x.type === 'custom' ? 'Customised' : x.type === 'bulk' ? 'Bulk' : 'Contact'}</td><td>${x.quantity}</td><td>${x.followUp ? date(x.followUp) : '-'}</td><td>${badge(x.status)}</td><td class="right"><button class="btn btn-line btn-sm" data-open="${x.id}">Open</button></td></tr>`)}</tbody></table></div>` : '';
+    }, empty('Nothing waiting', 'New enquiries will appear here.', null, 'mail'));
+    on(main, '[data-open]', el => {
+      const e = list.find(x => x.id === el.dataset.open);
+      modal(e.number, html`<div class="stack"><dl class="kv"><dt>From</dt><dd>${e.name}, ${e.organisation}</dd><dt>Type</dt><dd>${e.orgType}</dd><dt>Mobile</dt><dd>${e.phone}</dd><dt>Email</dt><dd>${e.email || '-'}</dd><dt>Quantity</dt><dd>${e.quantity}</dd><dt>Message</dt><dd>${e.message}</dd>${e.artworkName ? html`<dt>Artwork</dt><dd>${e.artworkName}</dd>` : ''}</dl>
+        ${e.notes.length ? html`<div><h4 class="mb">Notes</h4>${e.notes.map(n => html`<p class="small mb-0"><strong>${n.by}</strong> ${dateTime(n.at)}<br>${n.text}</p>`)}</div>` : ''}
+        <form class="form" novalidate><div class="form-2">${field('status', 'Status', { type: 'select', value: e.status, options: ENQ })}${field('followUp', 'Follow-up date', { type: 'date', value: e.followUp ? e.followUp.slice(0, 10) : '' })}</div>${field('note', 'Add a note', { type: 'textarea', rows: 2 })}<button class="btn btn-red" type="submit">Save</button></form></div>`, async v => {
+          await api.admin.updateEnquiry(e.id, { status: v.status, note: v.note, followUp: v.followUp ? new Date(v.followUp).toISOString() : null });
+          list = await api.admin.enquiries(); render(); toast('Enquiry saved');
+        });
+    });
+  });
+
+  /* ---------- Quotes ---------- */
+  const QST = ['Quote requested', 'Quote ready', 'Accepted', 'Ordered', 'Declined', 'Expired'];
+  page('admin-quotes', { layout: 'admin', access: 'staff:quotes' }, async main => {
+    const list = await api.admin.quotes();
+    listing(main, title('Quotes', 'Reply within one working day.'), filterBar('Search quote or shop', QST), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.number, x.company].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Quote</th><th>Shop</th><th>Requested</th><th class="num">Pieces</th><th>Valid until</th><th>Status</th></tr></thead><tbody>${r.map(x => html`<tr class="click" data-href="admin-quote.html?id=${x.id}"><td><a class="mono" href="admin-quote.html?id=${x.id}">${x.number}</a></td><td>${x.company}</td><td>${date(x.createdAt)}</td><td class="num">${pcs(x.lines)}</td><td>${x.validUntil ? date(x.validUntil) : '-'}</td><td>${badge(x.status)}</td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No quotes found', 'Quote requests will appear here.', null, 'file'));
+  });
+
+  page('admin-quote', { layout: 'admin', access: 'staff:quotes' }, async main => {
+    const id = param('id');
+    const render = async () => {
+      const q = await api.admin.quote(id);
+      const editable = ['Quote requested', 'Quote ready'].includes(q.status);
+      const listTotal = q.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+      main.innerHTML = html`<a class="link small" href="admin-quotes.html">Back to quotes</a>${title(q.number, q.company + ' · requested ' + date(q.createdAt), badge(q.status))}
+      <form class="stack" id="offer" novalidate>
+        ${q.shortageAcknowledged ? notice('warn', 'Stock shortage', 'The retailer accepted that some sizes may take longer.') : ''}
+        <div class="card"><div class="card-head"><h3>Lines</h3><span class="small muted">List value ${money(listTotal)}</span></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">List price</th><th class="num">Offer price (₹)</th></tr></thead><tbody>${q.lines.map((l, i) => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num"><label class="sr" for="p${i}">Offer price for ${l.name} ${l.colour} ${l.size}</label><input id="p${i}" name="p${i}" class="input" style="width:100px;min-height:36px;padding:4px 8px;text-align:right" type="number" step="0.01" min="0" value="${l.offerPrice ?? l.unitPrice}" ${editable ? '' : raw('disabled')}></td></tr>`)}</tbody></table></div></div>
+        <div class="card"><div class="card-head"><h3>Messages</h3></div><div class="card-pad stack">${q.messages.length ? q.messages.map(m => html`<p class="mb-0"><strong>${m.by}</strong> <span class="small muted">${dateTime(m.at)}</span><br>${m.text}</p>`) : html`<p class="muted mb-0">No messages.</p>`}
+          ${editable ? html`${field('message', 'Message to retailer', { type: 'textarea', rows: 2 })}<div><button class="btn btn-red" type="submit">Send offer</button></div>` : ''}</div></div>
+      </form>`;
+      if (editable) onSubmit(main.querySelector('#offer'), async v => {
+        await api.admin.sendOffer(id, { prices: q.lines.map((_, i) => v['p' + i]), message: v.message });
+        toast('Offer sent'); await render();
+      });
+    };
+    await render();
+  });
+
+  /* ---------- Orders ---------- */
+  const OST = ['Awaiting advance', 'Confirmed', 'Packing', 'Dispatched', 'Delivered', 'Paid in full', 'Artwork awaiting approval', 'In production', 'Awaiting balance', 'On hold', 'Cancelled', 'Expired'];
+  page('admin-orders', { layout: 'admin', access: 'staff:orders' }, async main => {
+    const list = await api.admin.orders();
+    listing(main, title('Orders', 'Every regular and customised order.'), filterBar('Search order or shop', OST), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.number, x.company].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Order</th><th>Shop</th><th>Date</th><th>Type</th><th class="num">Pieces</th><th class="num">Value</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>${r.map(o => html`<tr class="click" data-href="admin-order.html?id=${o.id}"><td><a class="mono" href="admin-order.html?id=${o.id}">${o.number}</a></td><td>${o.company}</td><td>${date(o.createdAt)}</td><td>${o.type === 'custom' ? 'Customised' : 'Regular'}</td><td class="num">${pcs(o.lines)}</td><td class="num">${money(o.subtotal)}</td><td class="num">${money(o.outstanding)}</td><td>${badge(o.status)}</td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No orders found', 'Try a different search.'));
+  });
+
+  const shipForm = () => html`<form class="form" novalidate>${field('courier', 'Courier or transporter', { required: true })}${field('lr', 'LR or tracking number', { required: true })}${field('url', 'Tracking link (optional)', { type: 'url' })}<button class="btn btn-red" type="submit">Mark as dispatched</button></form>`;
+
+  page('admin-order', { layout: 'admin', access: 'staff:orders' }, async (main, { me }) => {
+    const id = param('id');
+    const render = async () => {
+      const o = await api.admin.order(id);
+      const r = me.role, is = (...a) => a.includes(r);
+      const actions = [];
+      if (o.status === 'Confirmed' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-to="Packing">Start packing</button>`);
+      if (o.status === 'Packing' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-ship>Dispatch order</button>`);
+      if (o.status === 'Dispatched' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-to="Delivered">Mark as delivered</button>`);
+      if (o.type === 'custom' && o.status === 'Awaiting advance' && is('Owner', 'Sales') && o.artwork?.status === 'approved' && o.payments.some(p => p.kind === 'advance' && p.status === 'verified')) actions.push(html`<button class="btn btn-red" data-auth>Authorise production</button>`);
+      if (o.status === 'Production authorised' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-to="In production">Start production</button>`);
+      if (o.status === 'In production' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-to="Awaiting balance">Production finished</button>`);
+      if (o.status === 'Awaiting balance' && o.outstanding === 0 && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-ship>Dispatch order</button>`);
+      if (o.artwork?.status === 'changes' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-art>Send new proof</button>`);
+      if (['Delivered', 'Dispatched'].includes(o.status) && o.outstanding > 0 && is('Owner', 'Finance')) actions.push(html`<button class="btn btn-navy" data-balance>Record balance</button>`);
+      if (o.status === 'On hold') actions.push(html`<button class="btn btn-navy" data-resume>Resume order</button>`);
+      else if (!['Delivered', 'Paid in full', 'Cancelled', 'Expired'].includes(o.status)) actions.push(html`<button class="btn btn-line" data-hold>Put on hold</button>`);
+      if (!['Dispatched', 'Delivered', 'Paid in full', 'Cancelled', 'Expired'].includes(o.status) && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-danger" data-cancel>Cancel order</button>`);
+
+      main.innerHTML = html`<a class="link small" href="admin-orders.html">Back to orders</a>
+      ${title(o.number, o.company + ' · ' + (o.type === 'custom' ? 'Customised' : 'Regular') + ' · ' + date(o.createdAt), badge(o.status))}
+      <div class="stack">
+        <div class="card card-pad">${tracker(o)}${actions.length ? html`<div class="row mt-l">${actions}</div>` : ''}</div>
+        ${o.designBrief ? notice('info', 'Design brief', o.designBrief) : ''}
+        ${o.artwork ? html`<div class="card card-pad"><h3 class="mb">Artwork, version ${o.artwork.version}</h3><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><img src="${o.artwork.image}" alt="Artwork proof" width="96" height="120" style="object-fit:cover;border-radius:4px"><div><p class="mb-0">${o.artwork.note}</p><p class="small muted mb-0">${o.artwork.status === 'awaiting' ? 'Waiting for the retailer' : o.artwork.reply}</p></div></div></div>` : ''}
+        <div class="card"><div class="card-head"><h3>Items (${pcs(o.lines)} pieces)</h3></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>${o.lines.map(l => html`<tr><td>${l.name}<div class="small muted mono">${l.sku}</div></td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num">${money(l.qty * l.unitPrice)}</td></tr>`)}</tbody></table></div></div>
+        <div class="two">
+          <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Order value</span><span>${money(o.subtotal)}</span></div><div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Verified payments</span><span>${money(o.paid)}</span></div><div class="tot"><span>Outstanding</span><span>${money(o.outstanding)}</span></div></div>
+            ${o.payments.map(p => html`<div class="row between small mt"><span class="mono">${p.ref}</span><span>${money(p.amount)}</span>${badge(p.status)}</div>`)}</div>
+          <div class="card card-pad"><h3 class="mb">Delivery</h3><p>${o.address.label}<br><span class="muted">${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}<br>${o.address.phone}</span></p>${o.shipment ? html`<dl class="kv"><dt>Courier</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd></dl>` : ''}</div>
+        </div>
+        <div class="card card-pad"><h3 class="mb">History</h3>${timeline(o.history)}</div>
+      </div>`;
+    };
+    on(main, '[data-to]', el => act(() => api.admin.setOrderStatus(id, el.dataset.to), 'Order updated').then(render));
+    on(main, '[data-auth]', () => act(() => api.admin.authoriseProduction(id), 'Production authorised').then(render));
+    on(main, '[data-ship]', () => modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(id, v); toast('Order dispatched'); await render(); }));
+    on(main, '[data-art]', () => modal('Send new proof', html`<form class="form" novalidate>${field('note', 'Note for the retailer', { type: 'textarea', required: true })}<button class="btn btn-red" type="submit">Send proof</button></form>`, async v => { await api.admin.sendArtwork(id, v.note); await render(); }));
+    on(main, '[data-balance]', async () => {
+      const o = await api.admin.order(id);
+      modal('Record balance', html`<form class="form" novalidate>${field('amount', 'Amount (₹)', { type: 'number', required: true, value: o.outstanding })}${field('method', 'Received by', { type: 'select', required: true, options: ['Cash on delivery', 'UPI', 'Bank transfer'] })}${field('ref', 'Reference', { required: true })}<button class="btn btn-red" type="submit">Record payment</button></form>`, async v => { await api.admin.recordBalance(id, v); toast('Payment recorded'); await render(); });
+    });
+    on(main, '[data-hold]', () => reasonBox('Put order on hold', 'The reason is saved on the order.', 'Put on hold', async r => { await api.admin.holdOrder(id, r); await render(); }));
+    on(main, '[data-resume]', () => act(() => api.admin.resumeOrder(id), 'Order resumed').then(render));
+    on(main, '[data-cancel]', () => reasonBox('Cancel order', 'Held stock will be released. The reason is saved on the order.', 'Cancel order', async r => { await api.admin.cancelOrder(id, r); await render(); }));
+    await render();
+  });
+
+  /* ---------- Payments ---------- */
+  page('admin-payments', { layout: 'admin', access: 'staff:payments' }, async (main, { me }) => {
+    const canVerify = ['Owner', 'Finance'].includes(me.role);
+    let list = await api.admin.payments();
+    const reload = async () => { list = await api.admin.payments(); render(); };
+    const render = listing(main, title('Payments', 'Check each reference against the bank statement before verifying.'), filterBar('Search reference, order or shop', ['submitted', 'verified', 'rejected']), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.ref, x.orderNumber, x.company].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Reference</th><th>Order</th><th>Shop</th><th>Kind</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead><tbody>${r.map(p => html`<tr><td class="mono">${p.ref}<div class="small muted">${dateTime(p.at)}</div></td><td><a class="mono small" href="admin-order.html?id=${p.orderId}">${p.orderNumber}</a></td><td>${p.company}</td><td>${p.kind === 'advance' ? 'Advance' : 'Balance'}<div class="small muted">${p.method}</div></td><td class="num">${money(p.amount)}</td><td>${badge(p.status)}</td><td class="right nowrap">${p.status === 'submitted' && canVerify ? html`<button class="btn btn-red btn-sm" data-ok="${p.id}" data-o="${p.orderId}">Verify</button> <button class="btn btn-ghost btn-sm" data-no="${p.id}" data-o="${p.orderId}">Reject</button>` : ''}</td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No payments found', 'Submitted references will appear here.', null, 'rupee'));
+    on(main, '[data-ok]', el => confirmBox('Verify this payment?', 'Only verify after you have found this reference on the bank statement.', 'Verify payment', async () => { await api.admin.verifyPayment(el.dataset.o, el.dataset.ok, { ok: true }); toast('Payment verified'); await reload(); }));
+    on(main, '[data-no]', el => reasonBox('Reject this reference', 'The retailer will see this reason.', 'Reject', async reason => { await api.admin.verifyPayment(el.dataset.o, el.dataset.no, { ok: false, reason }); toast('Reference rejected'); await reload(); }));
+  });
+
+  /* ---------- Dispatch ---------- */
+  page('admin-dispatch', { layout: 'admin', access: 'staff:dispatch' }, async (main, { me }) => {
+    const canAct = ['Owner', 'Warehouse'].includes(me.role);
+    const render = async () => {
+      const list = await api.admin.dispatch();
+      const section = (t, rows, actionFn) => html`<div class="card"><div class="card-head"><h3>${t}</h3><span class="small muted">${rows.length}</span></div>${rows.length ? html`<div class="tw"><table class="t"><tbody>${rows.map(o => html`<tr><td><a class="mono" href="admin-order.html?id=${o.id}">${o.number}</a><div class="small muted">${o.company}, ${o.address.city}</div></td><td class="num">${pcs(o.lines)} pieces</td><td>${o.shipment ? html`<span class="mono small">${o.shipment.lr}</span>` : badge(o.status)}</td><td class="right">${canAct ? actionFn(o) : ''}</td></tr>`)}</tbody></table></div>` : html`<p class="muted card-pad mb-0">Nothing here.</p>`}</div>`;
+      main.innerHTML = html`${title('Dispatch', 'Pack confirmed orders and record the courier details.')}<div class="stack">
+        ${section('To pack', list.filter(o => o.status === 'Confirmed'), o => html`<button class="btn btn-line btn-sm" data-to="Packing" data-id="${o.id}">Start packing</button>`)}
+        ${section('Packing, ready to dispatch', list.filter(o => o.status === 'Packing'), o => html`<button class="btn btn-red btn-sm" data-ship="${o.id}">Dispatch</button>`)}
+        ${section('On the way', list.filter(o => o.status === 'Dispatched'), o => html`<button class="btn btn-line btn-sm" data-to="Delivered" data-id="${o.id}">Mark delivered</button>`)}
+      </div>`;
+    };
+    on(main, '[data-to]', el => act(() => api.admin.setOrderStatus(el.dataset.id, el.dataset.to), 'Order updated').then(render));
+    on(main, '[data-ship]', el => modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(el.dataset.ship, v); toast('Order dispatched'); await render(); }));
+    await render();
+  });
+
+  /* ---------- Products ---------- */
+  page('admin-products', { layout: 'admin', access: 'staff:products' }, async main => {
+    const list = await api.admin.products();
+    listing(main, title('Products', 'Styles shown in the catalogue.', html`<a class="btn btn-red" href="admin-product.html">Add product</a>`), filterBar('Search name or code', ['active', 'hidden']), (q, s) => {
+      const r = list.filter(x => (!s || x.status === s) && [x.name, x.style].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Style</th><th>Code</th><th class="num">Colours</th><th class="num">Price</th><th class="num">Available</th><th>Status</th></tr></thead><tbody>${r.map(p => html`<tr class="click" data-href="admin-product.html?id=${p.id}"><td><div class="row" style="flex-wrap:nowrap"><img src="${p.colours[0].images[0]}" alt="" width="40" height="50" style="object-fit:cover;border-radius:4px"><a href="admin-product.html?id=${p.id}"><strong>${p.name}</strong></a></div></td><td class="mono small">${p.style}</td><td class="num">${p.colours.length}</td><td class="num">${money(p.price)}</td><td class="num">${p.totalAvailable}</td><td><span class="badge ${p.status === 'active' ? 'b-ok' : 'b-mute'}">${p.status === 'active' ? 'Active' : 'Hidden'}</span></td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No products found', 'Try a different search.'));
+  });
+
+  page('admin-product', { layout: 'admin', access: 'staff:products' }, async main => {
+    const id = param('id');
+    const p = id ? await api.admin.product(id) : { status: 'active', gender: 'Men', sizes: [] };
+    const cats = await api.catalog.categories();
+    main.innerHTML = html`<a class="link small" href="admin-products.html">Back to products</a>${title(id ? p.name : 'Add product', id ? p.style : 'New styles start with no stock. Add stock in Inventory.')}
+    <div class="form-card"><form class="form" novalidate><input type="hidden" name="id" value="${id || ''}">
+      <div class="form-2">${field('name', 'Style name', { required: true, value: p.name || '' })}${field('style', 'Style code', { required: true, value: p.style || '' })}</div>
+      <div class="form-2">${field('category', 'Category', { type: 'select', required: true, value: p.category || '', options: [['', 'Select'], ...cats.map(c => [c.id, c.name])] })}${field('gender', 'For', { type: 'select', value: p.gender, options: ['Men', 'Women', 'Unisex'] })}</div>
+      <div class="form-2">${field('price', 'Trade price (₹ per piece)', { required: true, type: 'number', value: p.price ?? '' })}${field('status', 'Status', { type: 'select', value: p.status, options: [['active', 'Active: shown in catalogue'], ['hidden', 'Hidden']] })}</div>
+      ${id ? '' : html`<div class="form-2">${field('colour', 'First colour', { required: true, value: '' })}${field('sizes', 'Sizes', { value: 'S,M,L,XL', hint: 'Separate with commas.' })}</div>`}
+      ${field('summary', 'Short description', { value: p.summary || '' })}${field('description', 'Full description', { type: 'textarea', value: p.description || '' })}
+      ${checkbox('customisable', 'Can be customised', { checked: p.customisable })}${checkbox('isNew', 'Show the New tag', { checked: p.isNew })}
+      ${id ? html`<div><span class="label">Colours and photos</span><div class="row mt">${p.colours.map(c => html`<div class="center small"><img src="${c.images[0]}" alt="" width="64" height="80" style="object-fit:cover;border-radius:4px;border:1px solid var(--line)">${c.name}<div class="muted">${c.images.length} ${c.images.length === 1 ? 'photo' : 'photos'}</div></div>`)}</div><p class="hint mt mb-0">Adding colours and uploading photos needs the backend connected.</p></div>` : ''}
+      <div class="row"><button class="btn btn-red" type="submit">Save product</button><a class="btn btn-line" href="admin-products.html">Cancel</a></div></form></div>`;
+    onSubmit(main.querySelector('form'), async v => { await api.admin.saveProduct(v); location.href = 'admin-products.html'; });
+  });
+
+  /* ---------- Inventory ---------- */
+  const REASONS = ['New stock received', 'Stock count correction', 'Damaged goods', 'Return from retailer', 'Other'];
+  page('admin-inventory', { layout: 'admin', access: 'staff:inventory' }, async main => {
+    let tab = 'stock';
+    const render = async () => {
+      const [inv, log] = await Promise.all([api.admin.inventory(), api.admin.stockLog()]);
+      main.innerHTML = html`${title('Inventory', 'Available = on hand minus stock held for orders. Every correction needs a reason.')}
+      <div class="card mb"><div class="tabs" role="tablist"><button role="tab" aria-selected="${String(tab === 'stock')}" data-tab="stock">Stock by size and colour</button><button role="tab" aria-selected="${String(tab === 'log')}" data-tab="log">Correction log</button></div></div>
+      ${tab === 'stock' ? html`<div class="stack">${inv.map(p => html`<details class="card" open><summary class="card-head" style="cursor:pointer"><strong>${p.name}</strong><span class="small muted mono">${p.style}</span></summary><div class="tw"><table class="t"><thead><tr><th>Colour</th><th>Size</th><th class="num">On hand</th><th class="num">Held</th><th class="num">Available</th><th></th></tr></thead><tbody>${p.rows.map(r => html`<tr><td>${r.colour}</td><td>${r.size}</td><td class="num">${r.onHand}</td><td class="num">${r.held}</td><td class="num"><strong>${r.available}</strong>${r.available === 0 ? html` <span class="badge b-bad">Out</span>` : ''}</td><td class="right"><button class="btn btn-line btn-sm" data-adj data-p="${p.id}" data-n="${p.name}" data-c="${r.colour}" data-z="${r.size}">Adjust</button></td></tr>`)}</tbody></table></div></details>`)}</div>`
+        : html`<div class="card">${log.length ? html`<div class="tw"><table class="t"><thead><tr><th>When</th><th>Item</th><th class="num">Change</th><th class="num">New on hand</th><th>Reason</th><th>By</th></tr></thead><tbody>${log.map(l => html`<tr><td>${dateTime(l.at)}</td><td>${l.product}<div class="small muted">${l.variant}</div></td><td class="num">${l.change > 0 ? '+' : ''}${l.change}</td><td class="num">${l.after}</td><td>${l.reason}${l.note ? html`<div class="small muted">${l.note}</div>` : ''}</td><td>${l.by}</td></tr>`)}</tbody></table></div>` : empty('No corrections yet', 'Stock corrections will be listed here.', null, 'list')}</div>`}`;
+    };
+    on(main, '[data-tab]', el => { tab = el.dataset.tab; render(); });
+    on(main, '[data-adj]', el => {
+      const d = el.dataset;
+      modal('Adjust stock', html`<form class="form" novalidate><p class="mb-0"><strong>${d.n}</strong><br><span class="muted">${d.c}, size ${d.z}</span></p>${field('change', 'Change in pieces', { type: 'number', required: true, hint: 'Use a minus sign to reduce. For example -5.' })}${field('reason', 'Reason', { type: 'select', required: true, options: [['', 'Select'], ...REASONS] })}${field('note', 'Note', { })}<button class="btn btn-red" type="submit">Save correction</button></form>`, async v => {
+        await api.admin.adjustStock({ productId: d.p, colour: d.c, size: d.z, ...v }); toast('Stock updated'); await render();
+      });
+    });
+    await render();
+  });
+
+  /* ---------- Reports ---------- */
+  page('admin-reports', { layout: 'admin', access: 'staff:reports' }, async main => {
+    const r = await api.admin.reports();
+    const maxM = Math.max(1, ...r.months.map(m => m.value)), maxP = Math.max(1, ...r.products.map(p => p.pieces));
+    const label = k => { const [y, m] = k.split('-'); return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }); };
+    const bar = (l, v, max, shown) => html`<div class="bar-row"><span>${l}</span><div class="bar-track"><i style="width:${v / max * 100}%" title="${l}: ${shown}"></i></div><span class="right">${shown}</span></div>`;
+    main.innerHTML = html`${title('Reports', 'Sales, collections and best-selling styles.')}
+    <div class="stack"><div class="tiles"><div class="stat"><span>Order value</span><strong>${money(r.sales)}</strong></div><div class="stat"><span>Collected</span><strong>${money(r.collected)}</strong></div><div class="stat"><span>Money to collect</span><strong>${money(r.outstanding)}</strong></div><div class="stat"><span>Orders</span><strong>${r.orders}</strong></div></div>
+      <div class="two"><div class="card card-pad"><h3 class="mb">Order value by month</h3><div class="bars">${r.months.map(m => bar(label(m.month), m.value, maxM, money(m.value)))}</div></div>
+      <div class="card card-pad"><h3 class="mb">Pieces sold by style</h3><div class="bars">${r.products.map(p => bar(p.name, p.pieces, maxP, p.pieces + ' pcs'))}</div></div></div>
+      <div class="card"><div class="card-head"><h3>Money to collect by retailer</h3></div><div class="tw"><table class="t"><thead><tr><th>Retailer</th><th class="num">Orders</th><th class="num">Ordered</th><th class="num">Paid</th><th class="num">Outstanding</th></tr></thead><tbody>${r.retailers.map(x => html`<tr><td>${x.company}</td><td class="num">${x.orders}</td><td class="num">${money(x.billed)}</td><td class="num">${money(x.paid)}</td><td class="num"><strong>${money(x.outstanding)}</strong></td></tr>`)}</tbody></table></div></div></div>`;
+  });
+
+  page('admin-notifications', { layout: 'admin', access: 'staff:notifications' }, async main => {
+    const list = await api.notifications.list();
+    main.innerHTML = html`${title('Notifications')}<div class="card">${list.length ? list.map(n => html`<a href="${n.link}" style="display:block;padding:12px 20px;border-bottom:1px solid var(--line);text-decoration:none"><strong style="font-weight:${n.read ? 400 : 600}">${n.title}</strong><div class="small muted">${dateTime(n.at)}</div></a>`) : empty('Nothing waiting on you', 'New activity will appear here.', null, 'bell')}</div>`;
+    api.notifications.readAll();
+  });
+
+  /* ---------- Staff, settings, log ---------- */
+  const ROLES = ['Owner', 'Administrator', 'Sales', 'Inventory', 'Warehouse', 'Finance'];
+  const ROLE_TEXT = { Owner: 'Sees everything and approves exceptions', Administrator: 'Manages users, settings and the activity log', Sales: 'Approves retailers, answers enquiries and quotes', Inventory: 'Keeps stock correct, with reasons', Warehouse: 'Packs, dispatches, confirms delivery', Finance: 'Verifies and records payments' };
+  page('admin-staff', { layout: 'admin', access: 'staff:staff' }, async main => {
+    const form = s => html`<form class="form" novalidate><input type="hidden" name="id" value="${s.id || ''}">${field('name', 'Name', { required: true, value: s.name || '' })}${field('email', 'Work email', { type: 'email', required: true, value: s.email || '' })}${field('role', 'Role', { type: 'select', required: true, value: s.role || 'Sales', options: ROLES })}<button class="btn btn-red" type="submit">Save</button></form>`;
+    const render = async () => {
+      const list = await api.admin.staff();
+      main._staff = list;
+      main.innerHTML = html`${title('Staff and roles', 'Each role only sees its own work.', html`<button class="btn btn-red" data-add>Add staff</button>`)}
+      <div class="stack"><div class="card"><div class="tw"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${list.map(s => html`<tr><td>${s.name}</td><td>${s.email}</td><td>${s.role}</td><td>${badge(s.active ? 'Active' : 'Inactive')}</td><td class="right nowrap"><button class="btn btn-line btn-sm" data-edit="${s.id}">Edit</button> <button class="btn btn-ghost btn-sm" data-toggle="${s.id}">${s.active ? 'Deactivate' : 'Reactivate'}</button></td></tr>`)}</tbody></table></div></div>
+      <div class="card"><div class="card-head"><h3>What each role does</h3></div><div class="tw"><table class="t"><tbody>${ROLES.map(r => html`<tr><td><strong>${r}</strong></td><td>${ROLE_TEXT[r]}</td></tr>`)}</tbody></table></div></div></div>`;
+    };
+    const save = async v => { await api.admin.saveStaff(v); toast('Saved'); await render(); };
+    on(main, '[data-add]', () => modal('Add staff', form({}), save));
+    on(main, '[data-edit]', el => modal('Edit staff', form(main._staff.find(s => s.id === el.dataset.edit)), save));
+    on(main, '[data-toggle]', el => act(() => api.admin.toggleStaff(el.dataset.toggle), 'Saved').then(render));
+    await render();
+  });
+
+  page('admin-settings', { layout: 'admin', access: 'staff:settings' }, async main => {
+    const s = await api.admin.allSettings();
+    main.innerHTML = html`${title('Settings', 'Business rules. Change them here, without touching any code.')}
+    <div class="stack" style="max-width:760px">${notice('warn', 'Planning values', 'These values are planning defaults. They need confirmation from the VK7SPORTS owner before real use.')}
+    <div class="form-card"><form class="form" novalidate>
+      <h3>Minimum order</h3>
+      ${checkbox('moqEnabled', 'Check the minimum order on every order', { checked: s.moqEnabled })}
+      ${checkbox('moqOnQuotes', 'Also check it on quote requests', { checked: s.moqOnQuotes })}
+      <div class="form-2">${field('moq', 'Regular minimum (pieces)', { type: 'number', required: true, value: s.moq, min: 1 })}${field('moqMode', 'Count it', { type: 'select', value: s.moqMode, options: [['per_style', 'Per style: sizes and colours count together'], ['per_variant', 'Per size and colour'], ['per_order', 'Across the whole order']] })}</div>
+      ${field('customMoq', 'Customised minimum (pieces)', { type: 'number', required: true, value: s.customMoq, min: 1 })}
+      <h3>Payments</h3>
+      <div class="form-2">${field('advancePct', 'Regular advance (%)', { type: 'number', required: true, value: s.advancePct, min: 0, max: 100 })}${field('customAdvancePct', 'Customised advance (%)', { type: 'number', required: true, value: s.customAdvancePct, min: 0, max: 100 })}</div>
+      <h3>Stock and quotes</h3>
+      <div class="form-2">${field('holdHours', 'Stock hold (hours)', { type: 'number', required: true, value: s.holdHours })}${field('quoteValidityDays', 'Quote valid for (days)', { type: 'number', required: true, value: s.quoteValidityDays })}</div>
+      ${field('lowStock', 'Low-stock alert (pieces)', { type: 'number', required: true, value: s.lowStock })}
+      ${field('shortageNote', 'Message when stock is short', { value: s.shortageNote })}
+      <div><button class="btn btn-red" type="submit">Save settings</button></div></form></div></div>`;
+    onSubmit(main.querySelector('form'), async v => { await api.admin.saveSettings(v); toast('Settings saved'); });
+  });
+
+  page('admin-audit', { layout: 'admin', access: 'staff:audit' }, async main => {
+    const list = await api.admin.audit();
+    main.innerHTML = html`${title('Activity log', 'Who changed what, and when.')}<div class="card">${list.length ? html`<div class="tw"><table class="t"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>On</th><th>Details</th></tr></thead><tbody>${list.map(l => html`<tr><td class="nowrap">${dateTime(l.at)}</td><td>${l.by}</td><td>${l.action}</td><td>${l.target}</td><td>${l.detail}</td></tr>`)}</tbody></table></div>` : empty('No activity yet', 'Changes made by staff will appear here.', null, 'list')}</div>`;
+  });
+})();
