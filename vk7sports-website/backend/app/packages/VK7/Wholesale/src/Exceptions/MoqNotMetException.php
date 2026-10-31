@@ -2,6 +2,6 @@
 
 namespace VK7\Wholesale\Exceptions;
 
-use RuntimeException;
+use Webkul\Sales\Exceptions\InsufficientInventoryException;
 
-class MoqNotMetException extends RuntimeException {}
+class MoqNotMetException extends InsufficientInventoryException {}

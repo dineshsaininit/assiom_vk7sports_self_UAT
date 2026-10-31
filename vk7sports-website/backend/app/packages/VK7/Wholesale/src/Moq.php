@@ -17,14 +17,7 @@ class Moq
      */
     public function cartViolation($cart): ?string
     {
-        $lines = $cart->items->map(fn ($item) => [
-            'style' => $item->product_id,
-            'variant' => $item->child?->sku ?? $item->sku,
-            'name' => $item->name,
-            'qty' => (int) $item->quantity,
-        ]);
-
-        return $this->violation($lines);
+        return $this->violation($this->cartLines($cart));
     }
 
     /**
@@ -47,12 +40,57 @@ class Moq
     }
 
     /**
+     * Reduce a cart to the lines the minimum is counted over.
+     */
+    public function cartLines($cart): Collection
+    {
+        return $cart->items->map(fn ($item) => [
+            'style' => $item->product_id,
+            'variant' => $item->child?->sku ?? $item->sku,
+            'name' => $item->name,
+            'qty' => (int) $item->quantity,
+        ]);
+    }
+
+    /**
+     * Describe how lines stand against the minimum, for the order grid and the cart.
+     */
+    public function evaluate(Collection $lines): array
+    {
+        return [
+            'enabled' => $this->applies(),
+            'min_qty' => (int) core()->getConfigData('vk7.moq.settings.min_qty'),
+            'mode' => core()->getConfigData('vk7.moq.settings.mode') ?: 'per_style',
+            'met' => $this->shortfalls($lines)->isEmpty(),
+            'shortfalls' => $this->shortfalls($lines)->values()->all(),
+        ];
+    }
+
+    /**
      * Group the lines by the configured mode and describe every group below the minimum.
      */
     protected function violation(Collection $lines): ?string
     {
-        if (! $this->applies()) {
+        $short = $this->shortfalls($lines);
+
+        if ($short->isEmpty()) {
             return null;
+        }
+
+        return trans('Minimum order is :min pieces :unit. Below minimum: :items.', [
+            'min' => (int) core()->getConfigData('vk7.moq.settings.min_qty'),
+            'unit' => str_replace('_', ' ', core()->getConfigData('vk7.moq.settings.mode') ?: 'per_style'),
+            'items' => $short->map(fn ($group) => $group['label'].' ('.$group['qty'].')')->implode(', '),
+        ]);
+    }
+
+    /**
+     * List the groups below the minimum with the pieces each still needs.
+     */
+    protected function shortfalls(Collection $lines): Collection
+    {
+        if (! $this->applies()) {
+            return collect();
         }
 
         $min = (int) core()->getConfigData('vk7.moq.settings.min_qty');
@@ -65,22 +103,13 @@ class Moq
             default => $lines->groupBy('style'),
         };
 
-        $short = $groups
+        return $groups
             ->map(fn ($group, $key) => [
                 'label' => $mode === 'per_order' ? 'whole order' : ($mode === 'per_variant' ? $key : $group->first()['name']),
                 'qty' => $group->sum('qty'),
+                'needed' => max(0, $min - $group->sum('qty')),
             ])
             ->filter(fn ($group) => $group['qty'] < $min);
-
-        if ($short->isEmpty()) {
-            return null;
-        }
-
-        return trans('Minimum order is :min pieces :unit. Below minimum: :items.', [
-            'min' => $min,
-            'unit' => str_replace('_', ' ', $mode ?: 'per_style'),
-            'items' => $short->map(fn ($group) => $group['label'].' ('.$group['qty'].')')->implode(', '),
-        ]);
     }
 
     /**

@@ -60,6 +60,7 @@ uses(ShopTestCase::class)->in('../packages/Webkul/Shop/tests');
 uses(StripeTestCase::class)->in('../packages/Webkul/Stripe/tests');
 uses(TaxTestCase::class)->in('../packages/Webkul/Tax/tests');
 uses(ThemeTestCase::class)->in('../packages/Webkul/Theme/tests');
+uses(ShopTestCase::class)->in('../packages/VK7/Wholesale/tests');
 
 /*
 |--------------------------------------------------------------------------

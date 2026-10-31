@@ -52,6 +52,26 @@ return [
         ],
     ],
     [
+        'key' => 'vk7.pricing',
+        'name' => 'Pricing',
+        'info' => 'Who may see trade prices.',
+        'icon' => 'settings/store.svg',
+        'sort' => 3,
+    ], [
+        'key' => 'vk7.pricing.visibility',
+        'name' => 'Visibility',
+        'info' => 'Provisional value pending owner confirmation (R-03).',
+        'sort' => 1,
+        'fields' => [
+            [
+                'name' => 'hide_from_guests',
+                'title' => 'Hide prices from visitors who are not signed in',
+                'type' => 'boolean',
+                'default' => false,
+            ],
+        ],
+    ],
+    [
         'key' => 'vk7.security',
         'name' => 'Security',
         'info' => 'Admin account security rules.',

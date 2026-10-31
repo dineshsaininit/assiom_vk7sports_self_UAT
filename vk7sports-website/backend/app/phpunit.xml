@@ -101,6 +101,11 @@
             <directory suffix="Test.php">packages/Webkul/Rule/tests/Unit</directory>
         </testsuite>
 
+        <!-- VK7 Wholesale package testsuites. -->
+        <testsuite name="VK7 Feature Test">
+            <directory suffix="Test.php">packages/VK7/Wholesale/tests/Feature</directory>
+        </testsuite>
+
         <!-- Sales package testsuites. -->
         <testsuite name="Sales Unit Test">
             <directory suffix="Test.php">packages/Webkul/Sales/tests/Unit</directory>

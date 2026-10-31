@@ -2,7 +2,6 @@
 
 namespace VK7\Wholesale;
 
-use Illuminate\Support\Facades\DB;
 use Webkul\Sales\Contracts\Sequencer as SequencerContract;
 use Webkul\Sales\Generators\OrderSequencer;
 
@@ -10,18 +9,20 @@ class OrderNumberSequencer extends OrderSequencer implements SequencerContract
 {
     /**
      * Claim the next order number from a single locked counter row, so concurrent checkouts never share one.
-     * ponytail: one row serialises numbering for the whole store; fine for wholesale volume.
+     * The counter never falls behind existing orders, so a restored database cannot repeat a number.
      *
      * @return int
      */
     public function getLastId()
     {
-        $sequence = DB::table('vk7_sequences')->where('name', 'order');
+        return app(Sequence::class)->next('order', 'orders') - 1;
+    }
 
-        $last = (int) $sequence->lockForUpdate()->value('value');
-
-        $sequence->update(['value' => $last + 1]);
-
-        return $last;
+    /**
+     * Keep this sequencer in charge even when a generator class is configured.
+     */
+    public function resolveGeneratorClass()
+    {
+        return $this->generate();
     }
 }

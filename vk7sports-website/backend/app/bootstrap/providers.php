@@ -97,6 +97,8 @@ return [
     TaxServiceProvider::class,
     ThemeServiceProvider::class,
     UserServiceProvider::class,
-    Webkul\B2BSuite\Providers\B2BSuiteServiceProvider::class,
-    VK7\Wholesale\Providers\WholesaleServiceProvider::class,
+    ...(getenv('VK7_CORE_INSTALL') ? [] : [
+        Webkul\B2BSuite\Providers\B2BSuiteServiceProvider::class,
+        VK7\Wholesale\Providers\WholesaleServiceProvider::class,
+    ]),
 ];

@@ -7,22 +7,30 @@ use Webkul\Checkout\Cart as BaseCart;
 class Cart extends BaseCart
 {
     /**
-     * Get cart errors, adding the minimum order quantity check after the core ones.
+     * Get cart errors, adding the quote lock and minimum order quantity checks after the core ones.
      */
     public function getErrors()
     {
         $errors = parent::getErrors();
 
-        if (
-            $errors
-            || ! ($message = app(Moq::class)->cartViolation($this->getCart()))
-        ) {
+        if ($errors) {
             return $errors;
         }
 
-        return [
-            'error_code' => 'MOQ_NOT_MET',
-            'message' => $message,
-        ];
+        if ($message = app(QuoteLock::class)->cartViolation($this->getCart())) {
+            return [
+                'error_code' => 'QUOTE_LOCKED',
+                'message' => $message,
+            ];
+        }
+
+        if ($message = app(Moq::class)->cartViolation($this->getCart())) {
+            return [
+                'error_code' => 'MOQ_NOT_MET',
+                'message' => $message,
+            ];
+        }
+
+        return $errors;
     }
 }
