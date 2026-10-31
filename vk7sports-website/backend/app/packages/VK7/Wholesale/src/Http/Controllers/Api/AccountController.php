@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use VK7\Wholesale\Repositories\EnquiryRepository;
+use VK7\Wholesale\Services\BusinessReport;
 use Webkul\Core\Models\CountryState;
 use Webkul\Customer\Models\CustomerAddress;
 use Webkul\Customer\Repositories\CustomerAddressRepository;
@@ -74,6 +75,14 @@ class AccountController extends Controller
         $customer->tokens()->where('id', '!=', $customer->currentAccessToken()->id)->delete();
 
         return response()->json(['message' => trans('Password changed.')]);
+    }
+
+    /**
+     * Return this retailer's running account.
+     */
+    public function statement(BusinessReport $report): JsonResponse
+    {
+        return response()->json(['data' => $report->statement($this->customer()->id)]);
     }
 
     /**

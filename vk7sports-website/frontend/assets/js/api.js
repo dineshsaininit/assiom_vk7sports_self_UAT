@@ -557,6 +557,21 @@
         save(db);
         return o;
       }),
+      startPayment: call((db, id, kind) => {
+        const o = orderFor(db, id, needRetailer(db));
+        return { payment_id: kind, gateway: 'demo', amount: kind === 'advance' ? o.advanceDue : outstanding(o), options: {} };
+      }),
+      confirmPayment: call((db, id, kind, result) => {
+        const u = needRetailer(db), o = orderFor(db, id, u);
+        if (result.simulated_result !== 'success') throw new ApiError('The test payment did not go through.', { code: 'PAYMENT_FAILED' });
+        o.payments.push({ id: 'pay-' + (++db.seq.payment), kind, amount: kind === 'advance' ? o.advanceDue : outstanding(o), method: 'Online', ref: 'DEMOPAY' + db.seq.payment, status: 'verified', at: iso(now()), by: 'Payment gateway', reason: null });
+        if (kind === 'advance' && o.status === 'Awaiting advance') {
+          o.holdUntil = null;
+          if (o.type === 'custom') o.history.push({ status: 'Advance verified', at: iso(now()), by: 'Payment gateway', note: '' });
+          else { o.status = 'Confirmed'; o.history.push({ status: 'Confirmed', at: iso(now()), by: 'Payment gateway', note: '' }); }
+        } else if (kind === 'balance') balanceSettled(o, 'Payment gateway');
+        save(db);
+      }),
       cancel: call((db, id, reason) => {
         const u = needRetailer(db), o = orderFor(db, id, u);
         if (o.status !== 'Awaiting advance' || o.payments.some(p => p.status === 'verified')) throw new ApiError('This order can no longer be cancelled online. Please contact sales.');
@@ -1034,7 +1049,10 @@
           const r = byRetailer[o.company]; r.billed += o.subtotal; r.paid += paidOn(o); r.outstanding += outstanding(o); r.orders += 1;
           o.lines.forEach(l => { byProduct[l.name] = (byProduct[l.name] || 0) + l.qty; });
         });
+        const pieces = o => o.lines.reduce((s, l) => s + l.qty, 0), monthOf = o => o.createdAt.slice(0, 7);
         return {
+          monthly: Object.keys(month).sort().map(k => { const m = live.filter(o => monthOf(o) === k); return { month: k, orders: m.length, pieces: m.reduce((s, o) => s + pieces(o), 0), sales: month[k], collected: m.reduce((s, o) => s + paidOn(o), 0), pending: m.reduce((s, o) => s + outstanding(o), 0) }; }),
+          pending: live.filter(o => outstanding(o) > 0).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).map(o => ({ id: o.id, number: o.number, company: o.company, stage: o.status, age_days: Math.floor((now() - new Date(o.createdAt)) / DAY), paid: paidOn(o), outstanding: outstanding(o) })),
           sales: live.reduce((s, o) => s + o.subtotal, 0), collected: live.reduce((s, o) => s + paidOn(o), 0), outstanding: live.reduce((s, o) => s + outstanding(o), 0), orders: live.length,
           months: Object.keys(month).sort().map(k => ({ month: k, value: month[k] })),
           products: Object.keys(byProduct).map(k => ({ name: k, pieces: byProduct[k] })).sort((a, b) => b.pieces - a.pieces),

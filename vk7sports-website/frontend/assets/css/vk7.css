@@ -466,3 +466,10 @@ a.stat:hover { border-color: var(--navy); }
   body { background: #fff; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Courier tracking map */
+.map { height: 300px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--bg); z-index: 0; }
+.map-note { display: grid; place-items: center; color: var(--ink-3); font-size: 13px; }
+.scan-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 900px) { .scan-grid { grid-template-columns: minmax(0, 1fr); } }
+@media print { .map { display: none; } }

@@ -4,6 +4,8 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use VK7\Wholesale\Services\OrderFinance;
+use VK7\Wholesale\Services\ShipmentDesk;
 use Webkul\Sales\Repositories\OrderRepository;
 
 class OrderController extends Controller
@@ -11,13 +13,19 @@ class OrderController extends Controller
     /**
      * Create a new controller instance.
      */
-    public function __construct(protected OrderRepository $orderRepository) {}
+    public function __construct(
+        protected OrderRepository $orderRepository,
+        protected OrderFinance $finance,
+        protected ShipmentDesk $shipmentDesk,
+    ) {}
 
     /**
      * List this retailer's orders.
      */
     public function index(Request $request): JsonResponse
     {
+        $this->finance->expireOverdue();
+
         $orders = $this->orderRepository->scopeQuery(
             fn ($query) => $query->whereIn('customer_id', $this->buyerIds())->orderByDesc('id')
         )->paginate(min((int) $request->query('limit', 15), 100));
@@ -65,6 +73,8 @@ class OrderController extends Controller
                 'total' => (float) $item->base_total,
             ])->values(),
             'shipments' => $this->shipments($order),
+            'finance' => $this->finance->summary($order),
+            'tracking' => $this->shipmentDesk->tracking($order),
             'comments' => $order->comments->map(fn ($comment) => [
                 'comment' => $comment->comment,
                 'created_at' => $comment->created_at,
@@ -133,9 +143,11 @@ class OrderController extends Controller
             'order_number' => $order->increment_id,
             'status' => $order->status,
             'status_label' => $order->status_label,
+            'stage' => $this->finance->terms($order)->stage,
             'total_qty' => (int) $order->total_qty_ordered,
             'created_at' => $order->created_at,
             'shipments' => $this->shipments($order),
+            'tracking' => $this->shipmentDesk->tracking($order),
         ]]);
     }
 
@@ -177,6 +189,7 @@ class OrderController extends Controller
             'order_number' => $order->increment_id,
             'status' => $order->status,
             'status_label' => $order->status_label,
+            'stage' => $this->finance->terms($order)->stage,
             'total_qty' => (int) $order->total_qty_ordered,
             'grand_total' => (float) $order->base_grand_total,
             'currency' => $order->order_currency_code,

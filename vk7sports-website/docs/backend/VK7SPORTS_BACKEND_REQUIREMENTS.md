@@ -6,9 +6,9 @@
 
 ## 1. Summary
 
-The backend now has a tested JSON API for a separate frontend. It covers registration with approval, the catalogue with a size × colour grid, the minimum order, cart, quotes, offline checkout, order tracking and enquiries. Staff use the existing Bagisto admin panel.
+The backend now has a tested JSON API for a separate frontend. It covers registration with approval, the catalogue with a size × colour grid, the minimum order, cart, quotes, checkout, advance and balance payments, courier tracking, order tracking and enquiries. Staff have a business desk (clients, payments, dispatch, monthly sales, pending payments) and use the Bagisto panel for the catalogue, quotes and staff users.
 
-It is **not production-ready**. Payments, ledger, stock-hold expiry, backorders, audit log and owner dashboard are not built. No business rule is owner-confirmed, and nobody independent has tested it.
+It is **not production-ready**. Payments run on a simulated gateway and the courier is simulated; no real money or parcel has moved. Backorders are not built. No business rule is owner-confirmed, and nobody independent has tested it.
 
 ### Three things to resolve first
 
@@ -39,13 +39,17 @@ Status: **Tested** = automated test and/or live HTTP run by the author. **Existi
 | Admin management of orders and quotes | Existing | Bagisto admin |
 | Stock checks and shortages | Tested at grid and cart | `/moq/check` |
 | Backorder and replenishment | Not built; awaits owner | |
-| 48-hour stock hold and expiry (R-16) | Not built | |
+| 48-hour stock hold and expiry (R-16) | Tested | `OrderFinance::expireOverdue`, `vk7:expire-holds` |
 | Price hiding from visitors (R-03) | Tested on the API and old JSON routes; old HTML pages now redirect guests | `HidePricesFromGuests.php` |
 | Enquiries and follow-up queue | Tested; status update not tested | `/enquiries`, Admin enquiries page |
-| 10% advance / 90% COD, ledger, invoices | **Deferred**; only offline methods accepted, no money handled | |
-| R-26 status names | Not built; Bagisto's statuses are returned | |
-| Pick list, packing slip, LR number | Not built; Bagisto shipments exist | |
-| Audit log, owner dashboard, event emails | Not built | |
+| 10% advance, balance after delivery, retailer statement | Tested on the simulated gateway. **Terms are planning defaults; real payments are not authorised** | `OrderFinance`, `PaymentController` |
+| Razorpay | Tested against a faked response only. Live keys are refused | `RazorpayGateway` |
+| Tax invoices | Deferred; needs the CA | |
+| R-26 status names | Tested for standard orders, as `stage`. Customised stages are not built | `vk7_order_terms` |
+| Courier booking and tracking | Tested with the simulated courier. Delhivery is an empty slot | `CourierProvider`, `ShipmentDesk` |
+| Pick list, packing slip | Not built | |
+| Activity log, owner dashboard, monthly and pending reports | Tested | `/admin/*`, `BusinessReport` |
+| Event emails | Not built | |
 | Hosting, backup, monitoring | Not started | |
 
 ## 3. Pages for the frontend
@@ -124,7 +128,7 @@ Every value below is a setting, applied by `php artisan vk7:apply-policy`, and i
 | Prices hidden from visitors (R-03) | Yes |
 | Retailer eligibility and approver (R-01, R-02) | Companies only, manual approval, business name required; no GSTIN or document checks |
 | Quote validity (R-09) | 7 days |
-| Payment terms (R-10, R-11) | None; offline methods only |
+| Payment terms (R-10, R-11) | 10% advance, balance after delivery, 48-hour hold, as settings. Real payments need Om's authorisation |
 | Custom order definition, MOQ 100, advance | Enquiry only |
 | Shortage and backorder (R-17) | Shows a shortage; no backorder |
 | Shipping partners and charges | Bagisto's seeded flat rate and free methods, **placeholder** |

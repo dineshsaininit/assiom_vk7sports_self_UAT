@@ -142,7 +142,7 @@ class DemoData extends Command
     /**
      * Find a demo category under the channel root, creating it when missing.
      */
-    protected function findOrCreateCategory(string $name): int
+    public function findOrCreateCategory(string $name): int
     {
         $locale = core()->getDefaultLocaleCodeFromDefaultChannel();
 

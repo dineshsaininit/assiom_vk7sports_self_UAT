@@ -45,7 +45,10 @@ Validation errors return 422 with `{ "message": "...", "errors": { "field": ["..
 | Profile, password, addresses | `GET` and `PUT /account`, `PUT /account/password`, `/account/addresses` |
 | Public order tracking | `POST /orders/track` |
 | My enquiries | `GET /enquiries/mine` |
-| Admin screens | **Not in this API.** Staff use the Bagisto panel at `/admin` |
+| Pay advance or balance | `POST /orders/{id}/payments`, `/payments/{paymentId}/confirm`, `/payments/reference` |
+| Account statement | `GET /account/statement` |
+| Staff business desk | `/admin/*`, see [Staff business desk](#staff-business-desk) |
+| Catalogue, quote offers, staff users | The Bagisto panel at `/admin` |
 
 About, policy and other static pages need no backend. Their wording awaits the owner.
 
@@ -217,13 +220,35 @@ After accepting, the lines are in the cart at the negotiated price and are locke
 
 Each step can return the cart errors `MOQ_NOT_MET`, `QUOTE_LOCKED` or `INSUFFICIENT_QUANTITY`, or `CART_EMPTY`.
 
-**Payment is offline only.** Cash on delivery and money transfer are the only methods accepted, and no money is collected. Online gateways return `INVALID_PAYMENT`. Do not build a payment screen, or show 10% advance / 90% COD as real terms, until the owner confirms them and Om authorises it.
+Checkout stays on the offline `moneytransfer` method and places the order first. Money is then collected against the order, as described under Payments. The advance and balance are planning defaults, not owner-confirmed terms.
+
+### Payments
+
+Each order has a `finance` block. The server works out every amount; the browser never sends one for an online payment.
+
+```json
+{ "stage": "Awaiting advance", "advance_percent": 10, "advance_due": 684, "balance_due": 6156, "total": 6840,
+  "paid": 0, "outstanding": 6840, "hold_until": "...", "payable": "advance", "gateway": "demo", "payments": [] }
+```
+
+`stage` runs `Awaiting advance` → `Confirmed` → `Packing` → `Dispatched` → `Delivered` → `Paid in full`, with `On hold`, `Cancelled` and `Expired` as side states. `payable` says what the retailer can pay now: `advance`, `balance` (only after delivery) or `null`.
+
+| Call | Body | Notes |
+|---|---|---|
+| `POST /orders/{id}/payments` | `{ kind }` | Returns `{ payment_id, gateway, amount, options }`. `NOT_PAYABLE` if that payment is not due. |
+| `POST /orders/{id}/payments/{paymentId}/confirm` | Razorpay's three result fields, or `{ simulated_result }` for the demo gateway | `PAYMENT_NOT_VERIFIED`, `PAYMENT_FAILED` |
+| `POST /orders/{id}/payments/reference` | `{ kind, method, reference }` | `method` is `UPI` or `Bank transfer`. Finance verifies it. `DUPLICATE_REFERENCE` if already used. |
+| `POST /webhooks/razorpay` | Razorpay's signed body | No token. Checked with `RAZORPAY_WEBHOOK_SECRET`. Safe to receive twice. |
+
+An order with no advance by `hold_until` expires and its stock is released (`php artisan vk7:expire-holds`, scheduled hourly, and also run when orders are listed).
 
 ### Orders
 
 `POST /orders/{id}/cancel` with `{ reason }` works while the order is `pending`; otherwise it returns `CANNOT_CANCEL`.
 
-`POST /orders/track` is public. Send `{ number, phone }` where the mobile is the one on the order. It returns basic progress with no prices, or 404 if either does not match.
+`POST /orders/track` is public. Send `{ number, phone }` where the mobile is the one on the order. It returns `stage` and `tracking` with no prices, or 404 if either does not match.
+
+Order detail and public tracking include `tracking`, or `null` before dispatch: `{ id, courier, waybill, status, simulated, tracking_url, expected_on, delivered_at, route: [{ lat, lng, label }], events: [{ status, location, lat, lng, description, occurred_at }] }`.
 
 `POST /checkout/order` also accepts optional `po_ref` and `notes`.
 
@@ -238,7 +263,22 @@ Each step can return the cart errors `MOQ_NOT_MET`, `QUOTE_LOCKED` or `INSUFFICI
   "shipments": [{ "id": 1, "carrier": "...", "track_number": "...", "total_qty": 24, "created_at": "..." }] } }
 ```
 
-`status` is one of Bagisto's values: `pending`, `pending_payment`, `processing`, `completed`, `canceled`, `closed`, `fraud`. Display `status_label`. The eight-stage status list in the planning documents (R-26) is not built. Use this list for now.
+Display `stage`, not `status`. `status` is Bagisto's own value, kept in step with the stage: `pending` until the advance is verified, `processing` until paid in full, then `completed`.
+
+## Staff business desk
+
+Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). Tokens last 12 hours and are refused on retailer routes, and the other way round. An account using two-factor sign-in gets `TWO_FACTOR_REQUIRED` and must use the panel: the desk has no second step yet. Each route needs an area from the role: `dashboard`, `retailers`, `orders`, `payments`, `dispatch`, `reports` or `audit`. A custom role grants them through the `vk7_desk.*` permissions in Bagisto's role screen; otherwise the route returns `FORBIDDEN`.
+
+| Area | Calls |
+|---|---|
+| any | `GET /admin/me`, `POST /admin/logout` |
+| `dashboard` | `GET /admin/dashboard` |
+| `reports` | `GET /admin/reports`: totals, `monthly`, `pending`, `retailers`, `products` |
+| `retailers` | `GET /admin/clients`, `GET /admin/clients/{id}`, `POST /admin/clients/{id}/decision` `{ decision, reason }` |
+| `orders` | `GET /admin/orders`, `GET /admin/orders/{id}`, `POST /admin/orders/{id}/hold`, `/resume`, `/cancel` |
+| `payments` | `GET /admin/payments`, `POST /admin/payments/{id}/review` `{ accepted, reason }`, `POST /admin/orders/{id}/collection` `{ amount, method, reference }` |
+| `dispatch` | `GET /admin/dispatch`, `POST /admin/orders/{id}/stage` `{ stage: "Packing" }`, `POST /admin/orders/{id}/dispatch`, `POST /admin/shipments/{id}/refresh` |
+| `audit` | `GET /admin/activity` |
 
 ## Connecting from your app
 

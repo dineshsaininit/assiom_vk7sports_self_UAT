@@ -79,6 +79,7 @@ php artisan vk7:demo-data
 - `vk7:apply-policy` writes the planning defaults (24 per style, hidden guest prices, company approval, 7-day quotes, offline payment). **Without it the minimum is off**, and the rest of the rules fall back to their defaults.
 - `vk7:apply-policy` clears the cache, because settings are cached. If you change `core_config` directly, run `php artisan cache:clear`, or the old values stay in use.
 - `vk7:demo-data` creates 4 fictional categories and styles with 32 variants. It refuses to run in production.
+- `php artisan vk7:demo-catalogue` creates the 5 sample VK7 styles with the supplied photos from `frontend/assets/img/products`. Pass `--images=<folder>` if the app runs from another location. Names, prices and stock are placeholders. Use one of the two commands, or the catalogue shows both.
 
 **Change the admin password straight away.** The installer creates `admin@example.com` with an upstream default password.
 
@@ -112,7 +113,26 @@ To approve a retailer, activate the company in the B2B Companies screen in admin
 
 CORS currently allows any origin in `config/cors.php`. That is safe for token calls in development. Restrict it to the frontend's address before any deployment.
 
-## 6. Tests
+## 6. Payments and courier
+
+Both are swappable, and both default to a simulation, so nothing here needs an account.
+
+| `.env` setting | Default | Meaning |
+|---|---|---|
+| `VK7_PAYMENT_GATEWAY` | `demo` | `demo` or `razorpay` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | empty | From the Razorpay dashboard, in test mode |
+| `VK7_PAYMENTS_ALLOW_LIVE` | `false` | A `rzp_live_` key is refused unless this is `true`. **Leave it false until Om authorises real payments.** |
+| `VK7_COURIER` | `demo` | `demo` or `delhivery` |
+
+The `demo` gateway refuses to run when `APP_ENV=production`, because a simulated result would otherwise count as money.
+
+**To use Razorpay test mode:** set the first three rows, run `php artisan config:clear`, and pay with Razorpay's test cards. Point a webhook at `/api/v1/webhooks/razorpay` for the `payment.captured` event; it needs a public address, so it cannot reach a local machine without a tunnel. Without it, payments still confirm through the browser. This path has only been tested against a faked Razorpay response, never the real service.
+
+**To add a courier:** implement `CourierProvider` (`book` and `track`) in `packages/VK7/Wholesale/src/Couriers`, add it to `Config/vk7.php`, and set `VK7_COURIER`. `DelhiveryCourier` is the empty slot for this: it reports "not connected" until written against a real account. Use `Delivered` as the final scan status so the order moves on. A real courier also needs its scans fetched on a schedule, or from its webhook, through `ShipmentDesk::refresh`.
+
+Terms are in Configure › VK7 Wholesale › Payment Terms. A change applies to new orders only.
+
+## 7. Tests
 
 Tests need their own database. Create `vk7_test`, then copy `.env` to `.env.testing` and change `DB_DATABASE=vk7_test` and `APP_ENV=testing`.
 

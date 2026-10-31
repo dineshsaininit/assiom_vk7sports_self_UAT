@@ -1,23 +1,26 @@
-/* Connects the retailer pages to the real backend when apiMode is 'live' in config.js.
+/* Connects the website to the real backend when apiMode is 'live' in config.js.
    It replaces the demo methods in api.js with calls to /api/v1 and returns the shapes the pages
    already expect. The server enforces every rule; nothing here decides a price, stock or minimum.
-   Staff screens are not part of this API: staff use the Bagisto admin panel. */
+   Catalogue, quote and staff-user screens stay in the Bagisto admin panel, listed in BAGISTO_SCREENS. */
 (function () {
   const VK7 = window.VK7, CFG = window.VK7_CONFIG;
   if (CFG.apiMode !== 'live') return;
 
-  if ((document.body.dataset.page || '').startsWith('admin')) {
-    location.replace(CFG.adminUrl);
+  const BAGISTO_SCREENS = {
+    'admin-enquiries': '/vk7/enquiries', 'admin-quotes': '/b2b/quotes', 'admin-quote': '/b2b/quotes', 'admin-products': '/catalog/products', 'admin-product': '/catalog/products',
+    'admin-inventory': '/catalog/products', 'admin-staff': '/settings/users', 'admin-settings': '/configuration/vk7/payments'
+  };
+  const PAGE = document.body.dataset.page || '';
+  if (BAGISTO_SCREENS[PAGE]) {
+    location.replace(CFG.adminUrl + BAGISTO_SCREENS[PAGE]);
     return;
   }
 
   const { ApiError, api } = VK7;
-  const TOKEN = 'vk7.live.token';
+  const STAFF_PAGE = PAGE.startsWith('admin');
+  const TOKEN = STAFF_PAGE ? 'vk7.live.staff' : 'vk7.live.token';
   const PLACEHOLDER = 'assets/img/brand/mark-navy.png';
   const NOT_YET = 'This is not available online yet. Please contact sales.';
-  const STATUS = { pending: 'Order placed', pending_payment: 'Order placed', processing: 'Packing', completed: 'Delivered', canceled: 'Cancelled', closed: 'Cancelled', fraud: 'On hold' };
-
-  VK7.FLOWS.standard = ['Order placed', 'Packing', 'Dispatched', 'Delivered'];
 
   const token = {
     get() { try { return localStorage.getItem(TOKEN); } catch (e) { return null; } },
@@ -59,19 +62,20 @@
     const colourAttr = attrs.find(a => a.code === 'color'), sizeAttr = attrs.find(a => a.code === 'size');
     const colourOptions = colourAttr ? colourAttr.options : [], sizeOptions = sizeAttr ? sizeAttr.options : [];
     const images = p.images && p.images.length ? p.images : [p.base_image || PLACEHOLDER];
-    const available = {}, variantIds = {};
+    const available = {}, variantIds = {}, colourImages = {};
     ((p.grid && p.grid.variants) || []).forEach(v => {
       const c = colourOptions.find(o => o.id === v.options.color), s = sizeOptions.find(o => o.id === v.options.size);
       if (!c || !s) return;
       const key = c.label + '|' + s.label;
       available[key] = v.stock == null ? (v.in_stock ? 1 : 0) : v.stock;
       variantIds[key] = v.id;
+      if (v.images && v.images.length) colourImages[c.label] = v.images;
     });
     const out = {
       id: String(p.id), slug: p.url_key, style: p.sku, name: p.name, summary: p.short_description || '', description: p.description || p.short_description || '',
       category: (p.categories || [])[0] || '', gender: '', kind: '', features: [], isNew: false, customisable: false, status: 'active',
       sizes: sizeOptions.map(o => o.label),
-      colours: colourOptions.map(o => ({ name: o.label, hex: o.swatch || '#CBD5E1', code: String(o.id), images })),
+      colours: colourOptions.map(o => ({ name: o.label, hex: o.swatch || '#CBD5E1', code: String(o.id), images: colourImages[o.label] || images })),
       available, variantIds, totalAvailable: Object.values(available).reduce((a, b) => a + b, 0)
     };
     if (p.prices) out.price = priceOf(p.prices);
@@ -141,20 +145,18 @@
   const allQuotes = async () => (await http('GET', '/quotes?limit=100')).data.map(quoteView);
 
   /* --- Orders --- */
-  function orderStatus(o) {
-    if (o.status === 'processing' && (o.shipments || []).length) return 'Dispatched';
-    return STATUS[o.status] || o.status_label || o.status;
-  }
+  const paymentView = p => ({ id: p.id, kind: p.kind, amount: p.amount, method: p.method, ref: p.reference || '', status: p.status, at: p.created_at, by: p.reviewed_by, reason: p.reject_reason });
   function orderView(o) {
-    const shipment = (o.shipments || [])[0];
-    const status = orderStatus(o);
+    const shipment = (o.shipments || [])[0], f = o.finance || {};
+    const status = f.stage || o.stage;
     const history = [{ status: 'Order placed', at: o.created_at, by: 'You', note: '' }];
-    (o.shipments || []).forEach(s => history.push({ status: 'Dispatched', at: s.created_at, by: 'VK7SPORTS', note: s.track_number ? 'Tracking ' + s.track_number : '' }));
+    (f.payments || []).filter(p => p.status === 'verified').forEach(p => history.push({ status: (p.kind === 'advance' ? 'Advance' : 'Balance') + ' received', at: p.created_at, by: '', note: '' }));
+    ((o.tracking && o.tracking.events) || []).forEach(e => history.push({ status: e.status, at: e.occurred_at, by: e.location, note: '' }));
     (o.comments || []).forEach(c => history.push({ status: 'Note', at: c.created_at, by: '', note: c.comment }));
     const reference = (o.comments || []).find(c => c.comment.startsWith('Retailer reference: '));
     return {
-      id: o.id, number: o.order_number, type: 'standard', status, createdAt: o.created_at, subtotal: o.sub_total, holdUntil: null, advancePct: null, advanceDue: null, balanceDue: null,
-      paid: 0, outstanding: 0, payments: [], artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
+      id: o.id, number: o.order_number, type: 'standard', status, createdAt: o.created_at, subtotal: f.total, holdUntil: f.hold_until, advancePct: f.advance_percent, advanceDue: f.advance_due, balanceDue: f.balance_due,
+      paid: f.paid, outstanding: f.outstanding, payable: f.payable || null, gateway: f.gateway, payments: (f.payments || []).map(paymentView), tracking: o.tracking || null, artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
       address: o.address || { label: '', line1: '', city: '', state: '', pin: '', phone: '' },
       shipment: shipment ? { courier: shipment.carrier || '', lr: shipment.track_number || '', date: shipment.created_at, url: '' } : null,
       lines: (o.items || []).map(i => ({ productId: String(i.product_id), variantId: i.variant_id, name: i.name, style: i.sku, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty_ordered, unitPrice: i.price, image: PLACEHOLDER }))
@@ -169,13 +171,25 @@
   /* --- Public methods, same names and shapes as the demo in api.js --- */
   api.demoReset = () => Promise.resolve();
 
+  let metaCache = null;
+  const meta = () => (metaCache = metaCache || http('GET', '/meta').then(r => r.data));
+
   api.settings = async () => {
-    const { moq } = (await http('GET', '/meta')).data;
-    return { moqEnabled: moq.enabled, moq: moq.min_qty, moqMode: moq.mode, customMoq: 100, advancePct: 10, customAdvancePct: 80, holdHours: 48, quoteValidityDays: 7, shortageNote: 'Additional stock may need a replenishment period. Please ask sales.' };
+    const { moq, payments } = (await meta());
+    return { moqEnabled: moq.enabled, moq: moq.min_qty, moqMode: moq.mode, customMoq: 100, advancePct: payments.advance_percent, customAdvancePct: 80, holdHours: payments.hold_hours, quoteValidityDays: 7, shortageNote: 'Additional stock may need a replenishment period. Please ask sales.' };
   };
 
   api.auth.me = async () => {
     if (!token.get()) return null;
+    if (STAFF_PAGE) {
+      try {
+        const u = (await http('GET', '/admin/me')).data;
+        return { kind: 'staff', id: u.id, name: u.name, email: u.email, role: u.role, areas: u.areas, perms: [...u.areas, 'notifications', 'enquiries', 'quotes', 'products', 'inventory', 'staff', 'settings'], unread: 0 };
+      } catch (e) {
+        if (e.status === 401) return null;
+        throw e;
+      }
+    }
     try {
       const u = (await http('GET', '/auth/me')).data;
       return { kind: 'retailer', id: u.id, name: (u.first_name + ' ' + u.last_name).trim(), company: u.company ? u.company.business_name : '', email: u.email, status: 'approved', approved: true, cartCount: u.cart_count, unread: 0 };
@@ -189,8 +203,12 @@
     token.set(res.token);
     return { status: 'approved' };
   };
-  api.auth.staffLogin = () => { location.href = CFG.adminUrl; return new Promise(() => {}); };
-  api.auth.logout = async () => { try { await http('POST', '/auth/logout'); } finally { token.del(); } };
+  api.auth.staffLogin = async ({ email, password }) => {
+    const res = await http('POST', '/admin/login', { email, password });
+    token.set(res.token);
+    return { role: res.data.role };
+  };
+  api.auth.logout = async () => { try { await http('POST', STAFF_PAGE ? '/admin/logout' : '/auth/logout'); } finally { token.del(); } };
   api.auth.register = async v => {
     if (v.password !== v.confirm) throw new ApiError('Please correct the highlighted fields.', { code: 'validation', fields: { confirm: 'The passwords do not match.' } });
     if (!v.agree) throw new ApiError('Please correct the highlighted fields.', { code: 'validation', fields: { agree: 'Please accept to continue.' } });
@@ -285,7 +303,8 @@
       if (!c.lines.some(l => l.locked)) { await api.quotes.accept(quoteId); c = await getCart(); }
       if (c.lines.some(l => !l.locked)) throw new ApiError('Your order list has other items. Remove them before ordering from this quote.');
     }
-    return { quote, lines: c.lines, pieces: c.pieces, subtotal: c.subtotal, advancePct: null, advanceDue: null, balanceDue: null, holdHours: null, addresses, violations: c.violations, shortages: c.shortages };
+    const s = await api.settings(), advanceDue = Math.round(c.subtotal * s.advancePct) / 100;
+    return { quote, lines: c.lines, pieces: c.pieces, subtotal: c.subtotal, advancePct: s.advancePct, advanceDue, balanceDue: c.subtotal - advanceDue, holdHours: s.holdHours, addresses, violations: c.violations, shortages: c.shortages };
   };
   api.checkout.place = async ({ addressId, poRef, notes, agree }) => {
     const fields = {};
@@ -306,7 +325,9 @@
 
   api.orders.list = allOrders;
   api.orders.get = orderDetail;
-  api.orders.submitPayment = () => Promise.reject(new ApiError(NOT_YET));
+  api.orders.startPayment = async (id, kind) => (await http('POST', '/orders/' + id + '/payments', { kind })).data;
+  api.orders.confirmPayment = async (id, paymentId, result) => (await http('POST', '/orders/' + id + '/payments/' + paymentId + '/confirm', result)).data;
+  api.orders.submitPayment = async (id, { kind, method, ref }) => (await http('POST', '/orders/' + id + '/payments/reference', { kind, method, reference: ref }, { reference: 'ref' })).data;
   api.orders.artwork = () => Promise.reject(new ApiError(NOT_YET));
   api.orders.cancel = async (id, reason) => orderView((await http('POST', '/orders/' + id + '/cancel', { reason })).data);
   api.orders.reorder = async id => {
@@ -316,7 +337,7 @@
   api.orders.track = async ({ number, phone }) => {
     const o = (await http('POST', '/orders/track', { number, phone })).data;
     const view = orderView(o);
-    return { number: view.number, type: 'standard', status: view.status, createdAt: view.createdAt, history: view.history, shipment: view.shipment, pieces: o.total_qty };
+    return { number: view.number, type: 'standard', status: view.status, createdAt: view.createdAt, history: view.history, shipment: view.shipment, tracking: view.tracking, pieces: o.total_qty };
   };
 
   const enquiryBody = (v, type) => ({
@@ -331,7 +352,7 @@
   api.account.get = async () => accountView((await http('GET', '/account')).data);
   api.account.overview = async () => {
     const [orders, quotes] = await Promise.all([allOrders(), allQuotes()]);
-    return { openOrders: orders.filter(o => !['Delivered', 'Cancelled'].includes(o.status)).length, awaitingAdvance: 0, quotesToReview: quotes.filter(q => q.status === 'Quote ready').length, balance: 0, recent: orders.slice(0, 5), artwork: [] };
+    return { openOrders: orders.filter(o => !['Paid in full', 'Cancelled', 'Expired'].includes(o.status)).length, awaitingAdvance: orders.filter(o => o.status === 'Awaiting advance').length, quotesToReview: quotes.filter(q => q.status === 'Quote ready').length, balance: orders.reduce((s, o) => s + o.outstanding, 0), recent: orders.slice(0, 5), artwork: [] };
   };
   api.account.update = async v => { await http('PUT', '/account', { ...splitName(v.contact), phone: v.phone }, { first_name: 'contact', last_name: 'contact' }); };
   api.account.password = async ({ current, next, confirm }) => { await http('PUT', '/account/password', { current_password: current, password: next, password_confirmation: confirm }, { current_password: 'current', password: 'next', password_confirmation: 'confirm' }); };
@@ -340,8 +361,53 @@
   api.account.defaultAddress = async id => { await http('POST', '/account/addresses/' + id + '/default'); };
   api.account.addUser = () => Promise.reject(new ApiError(NOT_YET));
   api.account.removeUser = () => Promise.reject(new ApiError(NOT_YET));
-  api.account.statement = async () => ({ rows: [], balance: 0, billed: 0, paid: 0 });
+  api.account.statement = async () => {
+    const s = (await http('GET', '/account/statement')).data;
+    return { ...s, rows: s.rows.map(r => ({ at: r.at, text: r.text, ref: r.order_id, debit: r.debit, credit: r.credit, balance: r.balance })) };
+  };
 
   api.notifications.list = async () => [];
   api.notifications.readAll = async () => {};
+
+  /* --- Staff business desk --- */
+  const rowView = r => ({ id: r.id, number: r.number, company: r.company, status: r.stage, stage: r.stage, createdAt: r.created_at, type: 'standard', subtotal: r.total, paid: r.paid, outstanding: r.outstanding, lines: [{ qty: r.pieces }], customerId: r.customer_id, address: { city: '' }, tracking: r.tracking || null, shipment: r.tracking ? { lr: r.tracking.waybill } : null });
+  const staffOrder = o => ({
+    ...rowView({ ...o, stage: o.stage }), holdUntil: o.hold_until, advancePct: o.advance_percent, advanceDue: o.advance_due, balanceDue: o.balance_due, payments: (o.payments || []).map(paymentView),
+    address: o.address || { label: '', line1: '', city: '', state: '', pin: '', phone: '' }, artwork: null, designBrief: null, tracking: o.tracking,
+    shipment: o.tracking ? { courier: o.tracking.courier, lr: o.tracking.waybill } : null,
+    history: [{ status: 'Order placed', at: o.created_at, by: o.company, note: '' }, ...(o.payments || []).filter(p => p.status === 'verified').map(p => ({ status: (p.kind === 'advance' ? 'Advance' : 'Balance') + ' verified', at: p.created_at, by: p.reviewed_by, note: p.reference || '' })), ...((o.tracking && o.tracking.events) || []).map(e => ({ status: e.status, at: e.occurred_at, by: e.location, note: '' }))],
+    lines: (o.items || []).map(i => ({ name: i.name, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty_ordered, unitPrice: i.price }))
+  });
+  const clientRow = c => ({ id: c.id, status: c.status, company: c.company, contact: c.contact, email: c.email, phone: c.phone, city: '', appliedAt: c.applied_at, orders: c.orders, outstanding: c.outstanding || 0 });
+
+  api.admin = {
+    dashboard: async () => {
+      const d = (await http('GET', '/admin/dashboard')).data;
+      return { ...d, openQuotes: null, newEnquiries: null, lowStockCount: null, lowStock: null, recent: d.recent.map(rowView) };
+    },
+    counts: async () => {
+      const d = (await http('GET', '/admin/dashboard')).data;
+      return { retailers: d.pendingRetailers, payments: d.awaitingVerification, dispatch: d.readyToDispatch };
+    },
+    reports: async () => (await http('GET', '/admin/reports')).data,
+    retailers: async () => (await http('GET', '/admin/clients')).data.map(clientRow),
+    retailer: async id => {
+      const c = (await http('GET', '/admin/clients/' + id)).data, a = c.addresses[0] || {};
+      return { ...clientRow(c), city: a.city || '-', state: a.state || '-', shopType: '-', gstin: a.gstin || '', proof: '-', priceList: 'Standard', rejectReason: null, addresses: [{ line1: a.line1 || '-', city: a.city || '', pin: a.pin || '' }], orders: c.orders.map(rowView), statement: c.statement };
+    },
+    decideRetailer: async (id, { decision, reason }) => { await http('POST', '/admin/clients/' + id + '/decision', { decision, reason: reason || null }); },
+    orders: async () => (await http('GET', '/admin/orders')).data.map(rowView),
+    order: async id => staffOrder((await http('GET', '/admin/orders/' + id)).data),
+    setOrderStatus: async (id, stage) => { await http('POST', '/admin/orders/' + id + '/stage', { stage }); },
+    holdOrder: async (id, reason) => { await http('POST', '/admin/orders/' + id + '/hold', { reason }); },
+    resumeOrder: async id => { await http('POST', '/admin/orders/' + id + '/resume'); },
+    cancelOrder: async (id, reason) => { await http('POST', '/admin/orders/' + id + '/cancel', { reason }); },
+    recordBalance: async (id, { amount, method, ref }) => { await http('POST', '/admin/orders/' + id + '/collection', { amount, method, reference: ref }, { reference: 'ref' }); },
+    bookCourier: async id => { await http('POST', '/admin/orders/' + id + '/dispatch'); },
+    refreshShipment: async id => { await http('POST', '/admin/shipments/' + id + '/refresh'); },
+    payments: async () => (await http('GET', '/admin/payments')).data.map(p => ({ ...paymentView(p), orderId: p.order_id, orderNumber: p.order_number, company: p.company })),
+    verifyPayment: async (orderId, payId, { ok, reason }) => { await http('POST', '/admin/payments/' + payId + '/review', { accepted: ok, reason: reason || null }); },
+    dispatch: async () => (await http('GET', '/admin/dispatch')).data.map(rowView),
+    audit: async () => (await http('GET', '/admin/activity')).data.map(l => ({ at: l.created_at, by: l.actor, action: l.action, target: l.target, detail: l.detail || '' }))
+  };
 })();

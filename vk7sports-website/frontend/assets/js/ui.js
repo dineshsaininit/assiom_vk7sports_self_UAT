@@ -97,6 +97,65 @@
   };
   const timeline = items => html`<ol class="timeline">${items.slice().reverse().map(h => html`<li><strong>${h.status}</strong><div class="small muted">${dateTime(h.at)}${h.by ? ' · ' + h.by : ''}</div>${h.note ? html`<div class="small">${h.note}</div>` : ''}</li>`)}</ol>`;
 
+  /* --- Courier tracking: scans plus a route map. The map library loads only when needed. --- */
+  const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+  const loadScript = src => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Could not load ' + src));
+    document.head.appendChild(s);
+  });
+  const trackingPanel = (t, action) => html`<div class="card"><div class="card-head"><div><h3>Delivery tracking</h3><span class="small muted">${t.courier} · <span class="mono">${t.waybill}</span></span></div>${badge(t.status)}</div>
+    <div class="card-pad stack">
+      ${t.simulated ? notice('info', null, 'Sample tracking: this is a demo courier, so the route and scans are simulated.') : ''}
+      <div class="scan-grid"><div class="map" data-map></div>
+      <div>${t.delivered_at ? html`<p class="small muted">Delivered on ${dateTime(t.delivered_at)}</p>` : t.expected_on ? html`<p class="small muted">Expected by ${date(t.expected_on)}</p>` : ''}
+        <ol class="timeline">${t.events.slice().reverse().map(e => html`<li><strong>${e.status}</strong><div class="small muted">${e.location} · ${dateTime(e.occurred_at)}</div><div class="small">${e.description}</div></li>`)}</ol></div></div>
+      ${t.tracking_url ? html`<a class="link" href="${t.tracking_url}" target="_blank" rel="noopener">Track on the courier's website</a>` : ''}
+      ${action || ''}
+    </div></div>`;
+  const mountMap = async (root, t) => {
+    const el = root.querySelector('[data-map]');
+    if (!el) return;
+    const fail = () => { el.classList.add('map-note'); el.textContent = 'The map could not be loaded. The scans are listed here.'; };
+    try {
+      if (!document.querySelector(`link[href="${LEAFLET}leaflet.min.css"]`)) {
+        const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = LEAFLET + 'leaflet.min.css'; document.head.appendChild(l);
+      }
+      await loadScript(LEAFLET + 'leaflet.min.js');
+      if (!el.isConnected) return;
+      const points = (t.route || []).map(p => [p.lat, p.lng]);
+      const map = L.map(el, { scrollWheelZoom: false, attributionControl: true });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+      L.polyline(points, { color: '#0A1121', weight: 3, dashArray: '6 6' }).addTo(map);
+      (t.route || []).forEach(p => L.circleMarker([p.lat, p.lng], { radius: 5, color: '#0A1121', fillColor: '#fff', fillOpacity: 1 }).bindTooltip(p.label).addTo(map));
+      const latest = t.events.filter(e => e.lat != null).pop();
+      if (latest) L.circleMarker([latest.lat, latest.lng], { radius: 9, color: '#E31B23', fillColor: '#E31B23', fillOpacity: .9 }).bindTooltip(latest.status + ', ' + latest.location, { permanent: true, direction: 'top' }).addTo(map);
+      map.fitBounds(points, { padding: [32, 32] });
+    } catch (e) { fail(); }
+  };
+
+  /* Opens the payment screen for what the server says is due. The result counts only after the server verifies it. */
+  const payOnline = async (orderId, kind, done) => {
+    const s = await api.orders.startPayment(orderId, kind);
+    const finish = async result => {
+      await api.orders.confirmPayment(orderId, s.payment_id, result);
+      toast('Payment received. Thank you.');
+      await done();
+    };
+    if (s.gateway === 'razorpay') {
+      await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+      new window.Razorpay({ ...s.options, theme: { color: '#0A1121' }, handler: r => finish(r).catch(e => toast(e.message, true)) }).open();
+      return;
+    }
+    const box = modal('Test payment', html`<div class="stack"><div>${notice('warn', 'This is a simulation', 'No money moves. It stands in for Razorpay until test keys are added.')}</div><div class="sum"><div class="tot"><span>Amount</span><span>${money(s.amount)}</span></div></div><div class="row between"><button class="btn btn-line" type="button" data-sim="failed">Simulate failure</button><button class="btn btn-red" type="button" data-sim="success">Simulate success</button></div></div>`);
+    box.el.querySelectorAll('[data-sim]').forEach(b => { b.onclick = async () => {
+      b.disabled = true;
+      try { await finish({ simulated_result: b.dataset.sim }); box.close(); }
+      catch (e) { toast(e.message, true); b.disabled = false; }
+    }; });
+  };
+
   /* --- Size x colour grid. Returns markup; wire with bindGrid() --- */
   const gridMarkup = (p, existing = {}, disabled = false) => html`
     <div class="mx" style="--sizes:${p.sizes.length}" data-grid>
@@ -277,10 +336,10 @@
     ['Account statement', 'account-statement.html', 'rupee'], ['Notifications', 'account-notifications.html', 'bell'], ['Shop profile', 'account-profile.html', 'user'], ['Addresses', 'account-addresses.html', 'truck'], ['Shop logins', 'account-users.html', 'users']
   ];
   const ADMIN_SIDE = [
-    ['Work', [['Dashboard', 'admin.html', 'home', 'dashboard'], ['Retailers', 'admin-retailers.html', 'users', 'retailers', 'retailers'], ['Enquiries', 'admin-enquiries.html', 'mail', 'enquiries', 'enquiries'], ['Quotes', 'admin-quotes.html', 'file', 'quotes', 'quotes'], ['Orders', 'admin-orders.html', 'box', 'orders']]],
+    ['Work', [['Dashboard', 'admin.html', 'home', 'dashboard'], ['Clients', 'admin-retailers.html', 'users', 'retailers', 'retailers'], ['Enquiries', 'admin-enquiries.html', 'mail', 'enquiries', 'enquiries'], ['Quotes', 'admin-quotes.html', 'file', 'quotes', 'quotes'], ['Orders', 'admin-orders.html', 'box', 'orders']]],
     ['Money and dispatch', [['Payments', 'admin-payments.html', 'rupee', 'payments', 'payments'], ['Dispatch', 'admin-dispatch.html', 'truck', 'dispatch', 'dispatch']]],
     ['Catalogue', [['Products', 'admin-products.html', 'layers', 'products'], ['Inventory', 'admin-inventory.html', 'list', 'inventory']]],
-    ['Business', [['Reports', 'admin-reports.html', 'chart', 'reports'], ['Notifications', 'admin-notifications.html', 'bell', 'notifications'], ['Staff and roles', 'admin-staff.html', 'shield', 'staff'], ['Settings', 'admin-settings.html', 'gear', 'settings'], ['Activity log', 'admin-audit.html', 'list', 'audit']]]
+    ['Business', [['Business overview', 'admin-reports.html', 'chart', 'reports'], ['Notifications', 'admin-notifications.html', 'bell', 'notifications'], ['Staff and roles', 'admin-staff.html', 'shield', 'staff'], ['Settings', 'admin-settings.html', 'gear', 'settings'], ['Activity log', 'admin-audit.html', 'list', 'audit']]]
   ];
 
   /* --- Page runner --- */
@@ -354,5 +413,5 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 
-  Object.assign(VK7, { html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
+  Object.assign(VK7, { trackingPanel, mountMap, payOnline, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
 })();

@@ -1,6 +1,6 @@
 # VK7SPORTS frontend
 
-The complete website: public pages, retailer account and staff back office (50 pages). Retailer pages run on the real backend by default; see `INTEGRATION.md`. Staff pages redirect to the Bagisto admin panel in live mode.
+The complete website: public pages, retailer account and staff back office (50 pages). Everything runs on the real backend by default; see `INTEGRATION.md`. In live mode the staff catalogue, quote and staff-user screens open the Bagisto admin panel.
 
 ## Run it
 

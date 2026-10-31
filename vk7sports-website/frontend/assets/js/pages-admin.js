@@ -1,8 +1,11 @@
 /* Staff back office. Labels use plain business words; each screen is limited by role. */
 (function () {
-  const { api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page } = VK7;
+  const { api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap } = VK7;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
+  /* What a staff member may do. Live mode goes by the areas the server granted; the demo goes by role name. */
+  const AREA_FOR_ROLE = { Owner: 'reports', Administrator: 'reports', Sales: 'retailers', Warehouse: 'dispatch', Finance: 'payments' };
+  const allowed = (me, ...roles) => me.areas ? roles.some(r => me.areas.includes(AREA_FOR_ROLE[r])) : roles.includes(me.role);
   const rowLinks = main => on(main, '[data-href]', (el, e) => { if (!e.target.closest('a,button')) location.href = el.dataset.href; });
   const tableSearch = (main, render) => {
     on(main, '[data-q]', () => render(), 'input');
@@ -25,14 +28,14 @@
   page('admin', { layout: 'admin', access: 'staff:dashboard' }, async (main, { me }) => {
     const d = await api.admin.dashboard();
     const can = p => me.perms.includes(p);
-    const tile = (label, value, href, note, perm) => !perm || can(perm) ? html`<a class="stat" href="${href}"><span>${label}</span><strong>${value}</strong>${note ? html`<em>${note}</em>` : ''}</a>` : '';
+    const tile = (label, value, href, note, perm) => value != null && (!perm || can(perm)) ? html`<a class="stat" href="${href}"><span>${label}</span><strong>${value}</strong>${note ? html`<em>${note}</em>` : ''}</a>` : '';
     main.innerHTML = html`${title('Dashboard', 'What needs attention today.')}
       <div class="stack">
         <div class="tiles">
           ${tile('Orders today', d.ordersToday, 'admin-orders.html', d.openOrders + ' open in total', 'orders')}
           ${tile('Payments to verify', d.awaitingVerification, 'admin-payments.html', d.awaitingAdvance + ' awaiting advance', 'payments')}
           ${tile('Money to collect', money(d.moneyToCollect), 'admin-reports.html', null, 'reports')}
-          ${tile('Retailers to approve', d.pendingRetailers, 'admin-retailers.html', null, 'retailers')}
+          ${tile('Clients to approve', d.pendingRetailers, 'admin-retailers.html', null, 'retailers')}
           ${tile('Quotes to answer', d.openQuotes, 'admin-quotes.html', null, 'quotes')}
           ${tile('New enquiries', d.newEnquiries, 'admin-enquiries.html', null, 'enquiries')}
           ${tile('Ready to dispatch', d.readyToDispatch, 'admin-dispatch.html', null, 'dispatch')}
@@ -40,7 +43,7 @@
         </div>
         <div class="two">
           ${can('orders') ? html`<div class="card"><div class="card-head"><h3>Latest orders</h3><a class="link small" href="admin-orders.html">View all</a></div><div class="tw"><table class="t"><tbody>${d.recent.map(o => html`<tr class="click" data-href="admin-order.html?id=${o.id}"><td><a class="mono small" href="admin-order.html?id=${o.id}">${o.number}</a><div class="small muted">${o.company}</div></td><td>${badge(o.status)}</td><td class="num">${money(o.subtotal)}</td></tr>`)}</tbody></table></div></div>` : ''}
-          ${can('inventory') ? html`<div class="card"><div class="card-head"><h3>Low stock</h3><a class="link small" href="admin-inventory.html">Open inventory</a></div>${d.lowStock.length ? html`<div class="tw"><table class="t"><tbody>${d.lowStock.map(l => html`<tr><td>${l.product}<div class="small muted">${l.variant}</div></td><td class="num"><span class="badge ${l.available ? 'b-warn' : 'b-bad'}">${l.available ? l.available + ' left' : 'Out of stock'}</span></td></tr>`)}</tbody></table></div>` : empty('Stock looks healthy', 'Nothing is below the low-stock level.', null, 'check')}</div>` : ''}
+          ${can('inventory') && d.lowStock ? html`<div class="card"><div class="card-head"><h3>Low stock</h3><a class="link small" href="admin-inventory.html">Open inventory</a></div>${d.lowStock.length ? html`<div class="tw"><table class="t"><tbody>${d.lowStock.map(l => html`<tr><td>${l.product}<div class="small muted">${l.variant}</div></td><td class="num"><span class="badge ${l.available ? 'b-warn' : 'b-bad'}">${l.available ? l.available + ' left' : 'Out of stock'}</span></td></tr>`)}</tbody></table></div>` : empty('Stock looks healthy', 'Nothing is below the low-stock level.', null, 'check')}</div>` : ''}
         </div>
       </div>`;
     rowLinks(main);
@@ -49,7 +52,7 @@
   /* ---------- Retailers ---------- */
   page('admin-retailers', { layout: 'admin', access: 'staff:retailers' }, async main => {
     const list = (await api.admin.retailers()).sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
-    listing(main, title('Retailers', 'Approve new shops and manage trade accounts.'), filterBar('Search shop, city or email', ['pending', 'approved', 'rejected', 'suspended']), (q, s) => {
+    listing(main, title('Clients', 'Every retailer, what they have ordered and what they owe.'), filterBar('Search shop, contact or email', ['pending', 'approved', 'rejected', 'suspended']), (q, s) => {
       const r = list.filter(x => (!s || x.status === s) && [x.company, x.city, x.email, x.contact].join(' ').toLowerCase().includes(q));
       return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Shop</th><th>City</th><th>Applied</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>${r.map(x => html`<tr class="click" data-href="admin-retailer.html?id=${x.id}"><td><a href="admin-retailer.html?id=${x.id}"><strong>${x.company}</strong></a><div class="small muted">${x.contact}</div></td><td>${x.city}</td><td>${date(x.appliedAt)}</td><td class="num">${x.orders}</td><td class="num">${money(x.outstanding)}</td><td>${badge(x.status)}</td></tr>`)}</tbody></table></div>` : '';
     }, empty('No retailers found', 'Try a different search.', null, 'users'));
@@ -57,10 +60,10 @@
 
   page('admin-retailer', { layout: 'admin', access: 'staff:retailers' }, async (main, { me }) => {
     const id = param('id');
-    const can = ['Owner', 'Sales', 'Administrator'].includes(me.role);
+    const can = allowed(me, 'Owner', 'Sales', 'Administrator');
     const render = async () => {
       const r = await api.admin.retailer(id);
-      main.innerHTML = html`<a class="link small" href="admin-retailers.html">Back to retailers</a>
+      main.innerHTML = html`<a class="link small" href="admin-retailers.html">Back to clients</a>
       ${title(r.company, r.city + ', ' + r.state, badge(r.status))}
       <div class="stack">
         ${r.status === 'pending' && can ? html`<div class="card card-pad"><h3 class="mb">Review this application</h3><ul class="ticks"><li>Check the shop name and address</li><li>Check the GSTIN or other proof</li><li>Call the mobile number to confirm</li></ul><div class="row"><button class="btn btn-red" data-decide="approved">Approve retailer</button><button class="btn btn-danger" data-decide="rejected">Reject</button></div></div>` : ''}
@@ -147,11 +150,11 @@
     const id = param('id');
     const render = async () => {
       const o = await api.admin.order(id);
-      const r = me.role, is = (...a) => a.includes(r);
+      const is = (...a) => allowed(me, ...a);
       const actions = [];
       if (o.status === 'Confirmed' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-to="Packing">Start packing</button>`);
       if (o.status === 'Packing' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-ship>Dispatch order</button>`);
-      if (o.status === 'Dispatched' && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-to="Delivered">Mark as delivered</button>`);
+      if (o.status === 'Dispatched' && is('Owner', 'Warehouse')) actions.push(o.tracking ? html`<button class="btn btn-red" data-scan="${o.tracking.id}">${o.tracking.simulated ? 'Simulate next courier scan' : 'Refresh courier status'}</button>` : html`<button class="btn btn-red" data-to="Delivered">Mark as delivered</button>`);
       if (o.type === 'custom' && o.status === 'Awaiting advance' && is('Owner', 'Sales') && o.artwork?.status === 'approved' && o.payments.some(p => p.kind === 'advance' && p.status === 'verified')) actions.push(html`<button class="btn btn-red" data-auth>Authorise production</button>`);
       if (o.status === 'Production authorised' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-to="In production">Start production</button>`);
       if (o.status === 'In production' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-to="Awaiting balance">Production finished</button>`);
@@ -166,6 +169,7 @@
       ${title(o.number, o.company + ' · ' + (o.type === 'custom' ? 'Customised' : 'Regular') + ' · ' + date(o.createdAt), badge(o.status))}
       <div class="stack">
         <div class="card card-pad">${tracker(o)}${actions.length ? html`<div class="row mt-l">${actions}</div>` : ''}</div>
+        ${o.tracking ? trackingPanel(o.tracking) : ''}
         ${o.designBrief ? notice('info', 'Design brief', o.designBrief) : ''}
         ${o.artwork ? html`<div class="card card-pad"><h3 class="mb">Artwork, version ${o.artwork.version}</h3><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><img src="${o.artwork.image}" alt="Artwork proof" width="96" height="120" style="object-fit:cover;border-radius:4px"><div><p class="mb-0">${o.artwork.note}</p><p class="small muted mb-0">${o.artwork.status === 'awaiting' ? 'Waiting for the retailer' : o.artwork.reply}</p></div></div></div>` : ''}
         <div class="card"><div class="card-head"><h3>Items (${pcs(o.lines)} pieces)</h3></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>${o.lines.map(l => html`<tr><td>${l.name}<div class="small muted mono">${l.sku}</div></td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num">${money(l.qty * l.unitPrice)}</td></tr>`)}</tbody></table></div></div>
@@ -176,10 +180,14 @@
         </div>
         <div class="card card-pad"><h3 class="mb">History</h3>${timeline(o.history)}</div>
       </div>`;
+      if (o.tracking) mountMap(main, o.tracking);
     };
+    on(main, '[data-scan]', el => act(() => api.admin.refreshShipment(el.dataset.scan), 'Tracking updated').then(render));
     on(main, '[data-to]', el => act(() => api.admin.setOrderStatus(id, el.dataset.to), 'Order updated').then(render));
     on(main, '[data-auth]', () => act(() => api.admin.authoriseProduction(id), 'Production authorised').then(render));
-    on(main, '[data-ship]', () => modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(id, v); toast('Order dispatched'); await render(); }));
+    on(main, '[data-ship]', () => api.admin.bookCourier
+      ? confirmBox('Book the courier', 'This books the pickup, takes the goods out of stock and starts tracking.', 'Book courier', async () => { await api.admin.bookCourier(id); toast('Courier booked'); await render(); })
+      : modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(id, v); toast('Order dispatched'); await render(); }));
     on(main, '[data-art]', () => modal('Send new proof', html`<form class="form" novalidate>${field('note', 'Note for the retailer', { type: 'textarea', required: true })}<button class="btn btn-red" type="submit">Send proof</button></form>`, async v => { await api.admin.sendArtwork(id, v.note); await render(); }));
     on(main, '[data-balance]', async () => {
       const o = await api.admin.order(id);
@@ -193,7 +201,7 @@
 
   /* ---------- Payments ---------- */
   page('admin-payments', { layout: 'admin', access: 'staff:payments' }, async (main, { me }) => {
-    const canVerify = ['Owner', 'Finance'].includes(me.role);
+    const canVerify = allowed(me, 'Owner', 'Finance');
     let list = await api.admin.payments();
     const reload = async () => { list = await api.admin.payments(); render(); };
     const render = listing(main, title('Payments', 'Check each reference against the bank statement before verifying.'), filterBar('Search reference, order or shop', ['submitted', 'verified', 'rejected']), (q, s) => {
@@ -206,18 +214,20 @@
 
   /* ---------- Dispatch ---------- */
   page('admin-dispatch', { layout: 'admin', access: 'staff:dispatch' }, async (main, { me }) => {
-    const canAct = ['Owner', 'Warehouse'].includes(me.role);
+    const canAct = allowed(me, 'Owner', 'Warehouse');
     const render = async () => {
       const list = await api.admin.dispatch();
       const section = (t, rows, actionFn) => html`<div class="card"><div class="card-head"><h3>${t}</h3><span class="small muted">${rows.length}</span></div>${rows.length ? html`<div class="tw"><table class="t"><tbody>${rows.map(o => html`<tr><td><a class="mono" href="admin-order.html?id=${o.id}">${o.number}</a><div class="small muted">${o.company}, ${o.address.city}</div></td><td class="num">${pcs(o.lines)} pieces</td><td>${o.shipment ? html`<span class="mono small">${o.shipment.lr}</span>` : badge(o.status)}</td><td class="right">${canAct ? actionFn(o) : ''}</td></tr>`)}</tbody></table></div>` : html`<p class="muted card-pad mb-0">Nothing here.</p>`}</div>`;
-      main.innerHTML = html`${title('Dispatch', 'Pack confirmed orders and record the courier details.')}<div class="stack">
+      main.innerHTML = html`${title('Dispatch', 'Pack confirmed orders, book the courier and follow deliveries.')}<div class="stack">
         ${section('To pack', list.filter(o => o.status === 'Confirmed'), o => html`<button class="btn btn-line btn-sm" data-to="Packing" data-id="${o.id}">Start packing</button>`)}
         ${section('Packing, ready to dispatch', list.filter(o => o.status === 'Packing'), o => html`<button class="btn btn-red btn-sm" data-ship="${o.id}">Dispatch</button>`)}
-        ${section('On the way', list.filter(o => o.status === 'Dispatched'), o => html`<button class="btn btn-line btn-sm" data-to="Delivered" data-id="${o.id}">Mark delivered</button>`)}
+        ${section('On the way', list.filter(o => o.status === 'Dispatched'), o => o.tracking ? html`<a class="btn btn-line btn-sm" href="admin-order.html?id=${o.id}">Track</a>` : html`<button class="btn btn-line btn-sm" data-to="Delivered" data-id="${o.id}">Mark delivered</button>`)}
       </div>`;
     };
     on(main, '[data-to]', el => act(() => api.admin.setOrderStatus(el.dataset.id, el.dataset.to), 'Order updated').then(render));
-    on(main, '[data-ship]', el => modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(el.dataset.ship, v); toast('Order dispatched'); await render(); }));
+    on(main, '[data-ship]', el => api.admin.bookCourier
+      ? confirmBox('Book the courier', 'This books the pickup, takes the goods out of stock and starts tracking.', 'Book courier', async () => { await api.admin.bookCourier(el.dataset.ship); toast('Courier booked'); await render(); })
+      : modal('Dispatch order', shipForm(), async v => { await api.admin.shipOrder(el.dataset.ship, v); toast('Order dispatched'); await render(); }));
     await render();
   });
 
@@ -271,14 +281,16 @@
   /* ---------- Reports ---------- */
   page('admin-reports', { layout: 'admin', access: 'staff:reports' }, async main => {
     const r = await api.admin.reports();
-    const maxM = Math.max(1, ...r.months.map(m => m.value)), maxP = Math.max(1, ...r.products.map(p => p.pieces));
+    const maxM = Math.max(1, ...r.monthly.map(m => m.sales)), maxP = Math.max(1, ...r.products.map(p => p.pieces));
     const label = k => { const [y, m] = k.split('-'); return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }); };
     const bar = (l, v, max, shown) => html`<div class="bar-row"><span>${l}</span><div class="bar-track"><i style="width:${v / max * 100}%" title="${l}: ${shown}"></i></div><span class="right">${shown}</span></div>`;
-    main.innerHTML = html`${title('Reports', 'Sales, collections and best-selling styles.')}
-    <div class="stack"><div class="tiles"><div class="stat"><span>Order value</span><strong>${money(r.sales)}</strong></div><div class="stat"><span>Collected</span><strong>${money(r.collected)}</strong></div><div class="stat"><span>Money to collect</span><strong>${money(r.outstanding)}</strong></div><div class="stat"><span>Orders</span><strong>${r.orders}</strong></div></div>
-      <div class="two"><div class="card card-pad"><h3 class="mb">Order value by month</h3><div class="bars">${r.months.map(m => bar(label(m.month), m.value, maxM, money(m.value)))}</div></div>
-      <div class="card card-pad"><h3 class="mb">Pieces sold by style</h3><div class="bars">${r.products.map(p => bar(p.name, p.pieces, maxP, p.pieces + ' pcs'))}</div></div></div>
-      <div class="card"><div class="card-head"><h3>Money to collect by retailer</h3></div><div class="tw"><table class="t"><thead><tr><th>Retailer</th><th class="num">Orders</th><th class="num">Ordered</th><th class="num">Paid</th><th class="num">Outstanding</th></tr></thead><tbody>${r.retailers.map(x => html`<tr><td>${x.company}</td><td class="num">${x.orders}</td><td class="num">${money(x.billed)}</td><td class="num">${money(x.paid)}</td><td class="num"><strong>${money(x.outstanding)}</strong></td></tr>`)}</tbody></table></div></div></div>`;
+    main.innerHTML = html`${title('Business overview', 'Monthly sales, money collected and payments still pending.')}
+    <div class="stack"><div class="tiles"><div class="stat"><span>Total sales</span><strong>${money(r.sales)}</strong></div><div class="stat"><span>Collected</span><strong>${money(r.collected)}</strong></div><div class="stat"><span>Pending payments</span><strong>${money(r.outstanding)}</strong></div><div class="stat"><span>Orders</span><strong>${r.orders}</strong></div></div>
+      <div class="card"><div class="card-head"><h3>Monthly sales</h3></div>${r.monthly.length ? html`<div class="card-pad"><div class="bars">${r.monthly.map(m => bar(label(m.month), m.sales, maxM, money(m.sales)))}</div></div><div class="tw"><table class="t"><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Pieces</th><th class="num">Sales</th><th class="num">Collected</th><th class="num">Pending</th></tr></thead><tbody>${r.monthly.map(m => html`<tr><td>${label(m.month)}</td><td class="num">${m.orders}</td><td class="num">${m.pieces}</td><td class="num">${money(m.sales)}</td><td class="num">${money(m.collected)}</td><td class="num">${money(m.pending)}</td></tr>`)}</tbody></table></div>` : empty('No sales yet', 'Monthly figures appear after the first order.', null, 'chart')}</div>
+      <div class="card"><div class="card-head"><h3>Pending payments</h3><span class="small muted">Oldest first</span></div>${r.pending.length ? html`<div class="tw"><table class="t"><thead><tr><th>Order</th><th>Client</th><th>Stage</th><th class="num">Age</th><th class="num">Paid</th><th class="num">Pending</th></tr></thead><tbody>${r.pending.map(p => html`<tr class="click" data-href="admin-order.html?id=${p.id}"><td><a class="mono small" href="admin-order.html?id=${p.id}">${p.number}</a></td><td>${p.company}</td><td>${badge(p.stage)}</td><td class="num">${p.age_days} days</td><td class="num">${money(p.paid)}</td><td class="num"><strong>${money(p.outstanding)}</strong></td></tr>`)}</tbody></table></div>` : empty('Nothing pending', 'Every order is fully paid.', null, 'check')}</div>
+      <div class="two"><div class="card"><div class="card-head"><h3>Money by client</h3></div>${r.retailers.length ? html`<div class="tw"><table class="t"><thead><tr><th>Client</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Pending</th></tr></thead><tbody>${r.retailers.map(x => html`<tr><td>${x.company}</td><td class="num">${x.orders}</td><td class="num">${money(x.billed)}</td><td class="num"><strong>${money(x.outstanding)}</strong></td></tr>`)}</tbody></table></div>` : empty('No clients yet', 'Clients appear after their first order.', null, 'users')}</div>
+      <div class="card card-pad"><h3 class="mb">Pieces sold by style</h3>${r.products.length ? html`<div class="bars">${r.products.map(p => bar(p.name, p.pieces, maxP, p.pieces + ' pcs'))}</div>` : html`<p class="muted mb-0">Nothing sold yet.</p>`}</div></div></div>`;
+    rowLinks(main);
   });
 
   page('admin-notifications', { layout: 'admin', access: 'staff:notifications' }, async main => {

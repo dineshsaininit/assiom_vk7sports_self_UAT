@@ -1,6 +1,6 @@
 /* Retailer pages: order list, checkout, quotes, orders, account. */
 (function () {
-  const { api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page } = VK7;
+  const { api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap, payOnline } = VK7;
   const CFG = window.VK7_CONFIG, PAY = CFG.payment;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
@@ -104,8 +104,8 @@
           <div class="field" data-field="addressId"><div class="stack" style="gap:8px">${c.addresses.map(a => html`<label class="card card-pad check" style="align-items:flex-start;padding:12px"><input type="radio" name="addressId" value="${a.id}" ${a.id === def.id ? raw('checked') : ''}><span><strong>${a.label}</strong><br><span class="muted small">${a.line1}, ${a.city}, ${a.state} ${a.pin} · ${a.phone}</span></span></label>`)}</div><span class="err" hidden></span></div></div>
         <div class="card card-pad"><h3 class="mb">Order details</h3><div class="form">${field('poRef', 'Your reference (optional)', { hint: 'For example your purchase order number.' })}${field('notes', 'Delivery notes (optional)', { type: 'textarea', rows: 3 })}</div></div>
         <div class="card card-pad"><h3 class="mb">How you pay</h3>
-          ${c.advancePct != null ? html`<p>You pay a <strong>${c.advancePct}% advance of ${money(c.advanceDue)}</strong> by UPI or bank transfer, then enter the payment reference on your order page. Stock is held for ${c.holdHours} hours.</p>
-          <p class="mb-0 muted">No payment is taken on this website. The balance of ${money(c.balanceDue)} is due on delivery, as agreed with VK7SPORTS.</p>` : html`<p class="mb-0">No payment is taken on this website. VK7SPORTS will contact you to confirm payment terms for this order.</p>`}</div>
+          ${c.advancePct != null ? html`<p>After placing the order you pay a <strong>${c.advancePct}% advance, about ${money(c.advanceDue)}</strong>, online or by UPI or bank transfer. Stock is held for ${c.holdHours} hours.</p>
+          <p class="mb-0 muted">The rest is due after delivery. The exact amounts, including delivery charges, appear on your order page.</p>` : html`<p class="mb-0">No payment is taken on this website. VK7SPORTS will contact you to confirm payment terms for this order.</p>`}</div>
         <div class="card"><div class="card-head"><h3>Items (${c.pieces} pieces)</h3></div>${lineTable(c.lines)}</div>
       </div>
       <aside class="card card-pad sticky"><h3 class="mb">Summary</h3>
@@ -128,7 +128,7 @@
       <h1>Order received</h1><p class="muted">Thank you. Your order number is</p>
       <p class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">${o.number}</p>
       ${o.advancePct != null ? html`<div class="sum" style="text-align:left;margin:16px 0"><div><span>Advance due</span><strong>${money(o.advanceDue)}</strong></div><div><span>Pay by</span><strong>${dateTime(o.holdUntil)}</strong></div></div>
-      <ol style="text-align:left;color:var(--ink-2)"><li>Pay the advance by UPI or bank transfer.</li><li>Enter the payment reference on your order page.</li><li>We verify it and confirm your order.</li></ol>` : html`<p>VK7SPORTS will contact you to confirm payment terms and delivery.</p>`}
+      <ol style="text-align:left;color:var(--ink-2)"><li>Pay the advance online, or by UPI or bank transfer.</li><li>We confirm your order and pack it.</li><li>Follow your delivery, and pay the balance after it arrives.</li></ol>` : html`<p>VK7SPORTS will contact you to confirm payment terms and delivery.</p>`}
       <div class="row" style="justify-content:center"><a class="btn btn-red" href="account-order.html?id=${o.id}">${o.advancePct != null ? 'Pay and view order' : 'View order'}</a><a class="btn btn-line" href="catalogue.html">Keep shopping</a></div>
     </div></div>`;
   });
@@ -186,21 +186,21 @@
     const details = html`<dl class="kv"><dt>UPI ID</dt><dd>${PAY.upiId || tbc()}</dd><dt>Bank</dt><dd>${PAY.bankName || tbc()}</dd><dt>Account name</dt><dd>${PAY.accountName || tbc()}</dd><dt>Account number</dt><dd>${PAY.accountNumber || tbc()}</dd><dt>IFSC</dt><dd>${PAY.ifsc || tbc()}</dd></dl>`;
     const pending = o.payments.find(p => p.status === 'submitted');
     const advanceDone = o.payments.some(p => p.kind === 'advance' && p.status === 'verified');
-    const canPayAdvance = o.status === 'Awaiting advance' && !advanceDone && (o.type === 'standard' || (o.artwork && o.artwork.status === 'approved'));
-    const canPayBalance = o.type === 'custom' && o.status === 'Awaiting balance' && o.outstanding > 0;
+    const canPayAdvance = o.payable !== undefined ? o.payable === 'advance' : o.status === 'Awaiting advance' && !advanceDone && (o.type === 'standard' || (o.artwork && o.artwork.status === 'approved'));
+    const canPayBalance = o.payable !== undefined ? o.payable === 'balance' : ['Awaiting balance', 'Delivered'].includes(o.status) && o.outstanding > 0;
     let form = '';
     if (pending) form = notice('info', 'Payment being verified', html`We have your reference <span class="mono">${pending.ref}</span> for ${money(pending.amount)}. Our finance team will confirm it soon.`);
     else if (canPayAdvance || canPayBalance) {
       const kind = canPayAdvance ? 'advance' : 'balance', amount = canPayAdvance ? o.advanceDue : o.outstanding;
-      form = html`<h4 class="mb" style="margin-top:16px">Paid already? Enter your reference</h4>
+      form = html`<div class="row mt"><button class="btn btn-red" type="button" data-pay="${kind}">Pay ${money(amount)} online</button></div><h4 class="mb" style="margin-top:20px">Paid by UPI or bank transfer? Enter your reference</h4>
       <form class="form" id="payform" novalidate data-kind="${kind}"><div class="form-2">${field('method', 'Paid by', { type: 'select', required: true, options: ['UPI', 'Bank transfer'] })}${field('amount', 'Amount (₹)', { type: 'number', required: true, value: amount })}</div>${field('ref', 'Payment reference (UTR)', { required: true, placeholder: 'For example 412345678901', maxlength: 30 })}<button class="btn btn-red" type="submit">Submit reference</button></form>`;
     }
     if (!pending && !canPayAdvance && !canPayBalance) return '';
     return html`<div class="card card-pad">
-      <div class="row between mb"><h3>Payment</h3>${o.holdUntil && canPayAdvance ? html`<span class="badge b-warn">${VK7.hoursLeft(o.holdUntil)} hours left</span>` : ''}</div>
+      <div class="row between mb"><h3>${canPayBalance ? 'Balance payment' : 'Payment'}</h3>${o.holdUntil && canPayAdvance ? html`<span class="badge b-warn">${VK7.hoursLeft(o.holdUntil)} hours left</span>` : ''}</div>
       ${canPayAdvance || canPayBalance ? html`<p>Please pay <strong>${money(canPayAdvance ? o.advanceDue : o.outstanding)}</strong> using these details.</p>${details}` : ''}
       ${form}
-      <p class="small muted mt mb-0">Online payment is not available yet. Never share your UPI PIN or OTP with anyone.</p></div>`;
+      <p class="small muted mt mb-0">Never share your UPI PIN or OTP with anyone.</p></div>`;
   };
 
   page('account-order', { layout: 'account', access: 'retailer' }, async main => {
@@ -217,7 +217,7 @@
           <div class="two"><img src="${o.artwork.image}" alt="Artwork proof" style="border-radius:8px;max-height:340px;object-fit:contain;background:var(--bg);width:100%"><div><p>${o.artwork.note}</p>${notice('warn', 'Please check carefully', 'Check every spelling, number and colour. After you approve, production can begin and changes may cost extra.')}<div class="row mt"><button class="btn btn-red" data-art="approve">Approve artwork</button><button class="btn btn-line" data-art="change">Request a change</button></div></div></div></div>`
           : o.artwork ? html`<div class="card card-pad"><h3>Artwork, version ${o.artwork.version}</h3><p class="mb-0 muted">${o.artwork.status === 'approved' ? o.artwork.reply + ' on ' + date(o.artwork.approvedAt) : 'Change requested: ' + o.artwork.reply}</p></div>` : ''}
         ${payBox(o)}
-        ${o.shipment ? html`<div class="card card-pad"><h3 class="mb">Delivery</h3><dl class="kv"><dt>Courier or transporter</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd><dt>Dispatched on</dt><dd>${date(o.shipment.date)}</dd></dl></div>` : ''}
+        ${o.tracking ? trackingPanel(o.tracking) : o.shipment ? html`<div class="card card-pad"><h3 class="mb">Delivery</h3><dl class="kv"><dt>Courier or transporter</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd><dt>Dispatched on</dt><dd>${date(o.shipment.date)}</dd></dl></div>` : ''}
         <div class="card"><div class="card-head"><h3>Items (${pcs(o.lines)} pieces)</h3></div>${lineTable(o.lines)}</div>
         <div class="two">
           <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div>${o.advancePct != null ? html`<div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance outstanding</span><span>${money(o.outstanding)}</span></div>` : html`<div class="tot"><span>Payment</span><span>To be confirmed</span></div>`}</div>
@@ -229,7 +229,9 @@
       </div>`;
       const pf = main.querySelector('#payform');
       if (pf) onSubmit(pf, async v => { await api.orders.submitPayment(id, { ...v, kind: pf.dataset.kind }); toast('Reference submitted'); await render(); });
+      if (o.tracking) mountMap(main, o.tracking);
     };
+    on(main, '[data-pay]', el => act(() => payOnline(id, el.dataset.pay, render)));
     on(main, '[data-reorder]', () => act(() => api.orders.reorder(id)).then(() => { location.href = 'cart.html'; }));
     on(main, '[data-cancel]', () => reasonBox('Cancel order', 'Held stock will be released.', 'Cancel order', async r => { await api.orders.cancel(id, r); toast('Order cancelled'); await render(); }));
     on(main, '[data-art]', el => {

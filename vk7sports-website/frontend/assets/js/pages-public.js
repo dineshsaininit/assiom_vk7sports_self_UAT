@@ -1,6 +1,6 @@
 /* Public pages, sign-in and registration, catalogue, product page, track, policies. */
 (function () {
-  const { api, html, raw, money, param, icon, badge, tbc, notice, empty, pageHead, productCard, priceBlock, gridMarkup, bindGrid, field, checkbox, onSubmit, toast, on, act, page, cardSkeleton, dateTime, timeline, tracker, crumbs } = VK7;
+  const { trackingPanel, mountMap, api, html, raw, money, param, icon, badge, tbc, notice, empty, pageHead, productCard, priceBlock, gridMarkup, bindGrid, field, checkbox, onSubmit, toast, on, act, page, cardSkeleton, dateTime, timeline, tracker, crumbs } = VK7;
   const CFG = window.VK7_CONFIG, C = CFG.contact;
   const contactValue = (v, label) => v ? v : tbc(label || 'To be confirmed');
 
@@ -392,8 +392,9 @@
       const o = await api.orders.track(v);
       main.querySelector('#out').innerHTML = html`<div class="card"><div class="card-head"><h3 class="mono">${o.number}</h3>${badge(o.status)}</div><div class="card-pad stack">
         ${tracker(o)}
-        ${o.shipment ? html`<dl class="kv"><dt>Courier</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd></dl>` : ''}
+        ${o.tracking ? trackingPanel(o.tracking) : o.shipment ? html`<dl class="kv"><dt>Courier</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd></dl>` : ''}
         <div><h4 class="mb">History</h4>${timeline(o.history)}</div></div></div>`;
+      if (o.tracking) mountMap(main, o.tracking);
     });
   });
 

@@ -2,14 +2,18 @@
 
 use Illuminate\Support\Facades\Route;
 use VK7\Wholesale\Http\Controllers\Api\AccountController;
+use VK7\Wholesale\Http\Controllers\Api\Admin\DeskController;
+use VK7\Wholesale\Http\Controllers\Api\Admin\StaffAuthController;
 use VK7\Wholesale\Http\Controllers\Api\AuthController;
 use VK7\Wholesale\Http\Controllers\Api\CartController;
 use VK7\Wholesale\Http\Controllers\Api\CatalogController;
 use VK7\Wholesale\Http\Controllers\Api\CheckoutController;
 use VK7\Wholesale\Http\Controllers\Api\EnquiryController;
 use VK7\Wholesale\Http\Controllers\Api\OrderController;
+use VK7\Wholesale\Http\Controllers\Api\PaymentController;
 use VK7\Wholesale\Http\Controllers\Api\QuoteController;
 use VK7\Wholesale\Http\Middleware\AuthenticateRetailer;
+use VK7\Wholesale\Http\Middleware\AuthenticateStaff;
 use VK7\Wholesale\Http\Middleware\ForceJson;
 
 Route::group([
@@ -17,6 +21,69 @@ Route::group([
     'middleware' => [ForceJson::class, 'throttle:vk7-api'],
     'as' => 'vk7.api.',
 ], function () {
+    Route::post('webhooks/razorpay', [PaymentController::class, 'webhook'])->name('webhooks.razorpay');
+
+    Route::post('admin/login', [StaffAuthController::class, 'login'])
+        ->middleware('throttle:vk7-login')
+        ->name('admin.login');
+
+    /**
+     * Staff routes, each limited to an area of the business desk.
+     */
+    Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
+        Route::middleware(AuthenticateStaff::class)->group(function () {
+            Route::get('me', [StaffAuthController::class, 'me'])->name('me');
+
+            Route::post('logout', [StaffAuthController::class, 'logout'])->name('logout');
+        });
+
+        Route::controller(DeskController::class)->group(function () {
+            Route::middleware(AuthenticateStaff::class.':dashboard')->get('dashboard', 'dashboard')->name('dashboard');
+
+            Route::middleware(AuthenticateStaff::class.':reports')->get('reports', 'reports')->name('reports');
+
+            Route::middleware(AuthenticateStaff::class.':audit')->get('activity', 'activity')->name('activity');
+
+            Route::middleware(AuthenticateStaff::class.':retailers')->group(function () {
+                Route::get('clients', 'clients')->name('clients.index');
+
+                Route::get('clients/{id}', 'client')->name('clients.show');
+
+                Route::post('clients/{id}/decision', 'decideClient')->name('clients.decide');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':orders')->group(function () {
+                Route::get('orders', 'orders')->name('orders.index');
+
+                Route::get('orders/{id}', 'order')->name('orders.show');
+
+                Route::post('orders/{id}/hold', 'holdOrder')->name('orders.hold');
+
+                Route::post('orders/{id}/resume', 'resumeOrder')->name('orders.resume');
+
+                Route::post('orders/{id}/cancel', 'cancelOrder')->name('orders.cancel');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':payments')->group(function () {
+                Route::get('payments', 'payments')->name('payments.index');
+
+                Route::post('payments/{id}/review', 'reviewPayment')->name('payments.review');
+
+                Route::post('orders/{id}/collection', 'recordCollection')->name('orders.collection');
+            });
+
+            Route::middleware(AuthenticateStaff::class.':dispatch')->group(function () {
+                Route::get('dispatch', 'dispatchQueue')->name('dispatch.index');
+
+                Route::post('orders/{id}/stage', 'moveOrder')->name('orders.stage');
+
+                Route::post('orders/{id}/dispatch', 'dispatchOrder')->name('orders.dispatch');
+
+                Route::post('shipments/{id}/refresh', 'refreshShipment')->name('shipments.refresh');
+            });
+        });
+    });
+
     /**
      * Public routes; a valid token is honoured so approved retailers see their own prices.
      */
@@ -114,6 +181,16 @@ Route::group([
             Route::post('{id}/accept', 'accept')->name('accept');
 
             Route::post('{id}/reject', 'reject')->name('reject');
+        });
+
+        Route::get('account/statement', [AccountController::class, 'statement'])->name('account.statement');
+
+        Route::controller(PaymentController::class)->prefix('orders/{id}/payments')->name('orders.payments.')->group(function () {
+            Route::post('', 'start')->name('start');
+
+            Route::post('reference', 'reference')->name('reference');
+
+            Route::post('{paymentId}/confirm', 'confirm')->name('confirm');
         });
 
         Route::controller(OrderController::class)->prefix('orders')->name('orders.')->group(function () {

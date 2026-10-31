@@ -17,6 +17,8 @@ class ApplyPolicy extends Command
         'vk7.moq.settings.mode' => ['per_style', 'default'],
         'vk7.moq.settings.apply_to_admin_orders' => ['1', 'default'],
         'vk7.pricing.visibility.hide_from_guests' => ['1', null],
+        'vk7.payments.terms.advance_percent' => ['10', null],
+        'vk7.payments.terms.hold_hours' => ['48', null],
         'b2b.general.settings.active' => ['1', 'default'],
         'b2b.general.settings.require_company_approval' => ['1', 'default'],
         'b2b.quotes.settings.default_expiration_period' => ['7', 'default'],

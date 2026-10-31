@@ -3,6 +3,7 @@
 namespace VK7\Wholesale\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
@@ -11,15 +12,20 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use VK7\Wholesale\Cart;
 use VK7\Wholesale\Console\Commands\ApplyPolicy;
+use VK7\Wholesale\Console\Commands\DemoCatalogue;
 use VK7\Wholesale\Console\Commands\DemoData;
+use VK7\Wholesale\Console\Commands\ExpireHolds;
 use VK7\Wholesale\Console\Commands\ResetAdminTwoFactor;
+use VK7\Wholesale\Couriers\CourierProvider;
 use VK7\Wholesale\Exceptions\Handler;
 use VK7\Wholesale\Http\Middleware\Bouncer;
 use VK7\Wholesale\Http\Middleware\HidePricesFromGuests;
 use VK7\Wholesale\Moq;
 use VK7\Wholesale\OrderNumberSequencer;
+use VK7\Wholesale\Payments\PaymentGateway;
 use VK7\Wholesale\QuoteLock;
 use VK7\Wholesale\Repositories\CustomerQuoteRepository;
+use VK7\Wholesale\Services\OrderFinance;
 use Webkul\B2BSuite\Repositories\CustomerQuoteRepository as BaseCustomerQuoteRepository;
 use Webkul\Checkout\Cart as BaseCart;
 use Webkul\Sales\Generators\OrderSequencer;
@@ -34,6 +40,8 @@ class WholesaleServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(dirname(__DIR__).'/Config/system.php', 'core');
 
+        $this->mergeConfigFrom(dirname(__DIR__).'/Config/vk7.php', 'vk7');
+
         $this->mergeConfigFrom(dirname(__DIR__).'/Config/menu.php', 'menu.admin');
 
         $this->mergeConfigFrom(dirname(__DIR__).'/Config/acl.php', 'acl');
@@ -45,6 +53,10 @@ class WholesaleServiceProvider extends ServiceProvider
         $this->app->bind(BaseCustomerQuoteRepository::class, CustomerQuoteRepository::class);
 
         $this->app->bind(OrderSequencer::class, OrderNumberSequencer::class);
+
+        $this->app->bind(PaymentGateway::class, fn ($app) => $app->make(config('vk7.payments.gateways')[config('vk7.payments.gateway')]));
+
+        $this->app->bind(CourierProvider::class, fn ($app) => $app->make(config('vk7.courier.providers')[config('vk7.courier.provider')]));
     }
 
     /**
@@ -65,7 +77,9 @@ class WholesaleServiceProvider extends ServiceProvider
         $this->registerRateLimits();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ApplyPolicy::class, DemoData::class, ResetAdminTwoFactor::class]);
+            $this->commands([ApplyPolicy::class, DemoCatalogue::class, DemoData::class, ExpireHolds::class, ResetAdminTwoFactor::class]);
+
+            $this->callAfterResolving(Schedule::class, fn (Schedule $schedule) => $schedule->command('vk7:expire-holds')->hourly());
         }
 
         $this->loadViewsFrom(dirname(__DIR__).'/Resources/views', 'vk7');
@@ -73,6 +87,10 @@ class WholesaleServiceProvider extends ServiceProvider
         Event::listen('checkout.order.save.before', [Moq::class, 'assertOrder']);
 
         Event::listen('checkout.order.save.before', [QuoteLock::class, 'assertOrder']);
+
+        Event::listen('checkout.order.save.after', fn ($order) => app(OrderFinance::class)->terms($order));
+
+        Event::listen('sales.order.cancel.after', fn ($order) => app(OrderFinance::class)->markCancelled($order));
 
         Event::listen('customer.registration.after', function ($customer) {
             if (

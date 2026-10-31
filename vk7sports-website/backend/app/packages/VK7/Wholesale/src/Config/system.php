@@ -72,6 +72,33 @@ return [
         ],
     ],
     [
+        'key' => 'vk7.payments',
+        'name' => 'Payment Terms',
+        'info' => 'Provisional values pending owner confirmation.',
+        'icon' => 'settings/store.svg',
+        'sort' => 3,
+    ], [
+        'key' => 'vk7.payments.terms',
+        'name' => 'Terms',
+        'info' => 'Applied to new orders. Existing orders keep the terms they were placed on.',
+        'sort' => 1,
+        'fields' => [
+            [
+                'name' => 'advance_percent',
+                'title' => 'Advance required (percent of order value)',
+                'type' => 'number',
+                'default' => 10,
+                'validation' => 'numeric|min:0|max:100',
+            ], [
+                'name' => 'hold_hours',
+                'title' => 'Hours stock is held while the advance is awaited',
+                'type' => 'number',
+                'default' => 48,
+                'validation' => 'integer|min:1',
+            ],
+        ],
+    ],
+    [
         'key' => 'vk7.security',
         'name' => 'Security',
         'info' => 'Admin account security rules.',
