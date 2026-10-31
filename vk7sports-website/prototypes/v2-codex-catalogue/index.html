@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VK7SPORTS · Wholesale collection demo</title><link rel="stylesheet" href="styles.css"><script type="module" src="app.mjs"></script></head>
+<body>
+<a class="skip" href="#main">Skip to catalogue</a>
+<div class="demo-bar">DEMO DATA · Fictional products & inventory · No requests are sent</div>
+<header class="header"><a class="brand" href="#main" aria-label="VK7SPORTS catalogue">VK7<span>SPORTS</span><small>WHOLESALE COLLECTION</small></a><nav aria-label="Main navigation"><a href="#main">Collection</a><button id="reviewTop" class="outline">Quotation <span id="count">0</span></button></nav></header>
+<main id="main">
+<section class="intro"><div><p class="eyebrow">FOR RETAILERS & SHOPKEEPERS</p><h1>Built for sport.<br>Selected for your store.</h1><p>Explore the collection. Choose your size and colour mix.<br class="desktop"> Build a quotation request in pieces.</p></div><div class="intro-note"><strong>01 / COLLECTION PREVIEW</strong><p>Fictional sportswear.<br>Real interaction.</p><span class="tag">DEMO DATA</span></div></section>
+<section class="workspace" aria-labelledby="collectionTitle">
+<div class="catalogue"><div class="section-head"><div><p class="eyebrow">THE COLLECTION</p><h2 id="collectionTitle">Sportswear essentials</h2></div><span id="results" role="status"></span></div>
+<div class="filters"><label class="search">Search collection<input id="search" type="search" placeholder="Try training or jacket"></label><label>Category<select id="category"><option value="all">All categories</option><option>Training</option><option>Team sport</option><option>Essentials</option></select></label></div>
+<div id="catalogueStatus" role="status"></div><div id="cards" class="cards"></div></div>
+<aside class="quote-panel" aria-labelledby="quoteTitle"><p class="eyebrow">YOUR SELECTION</p><h2 id="quoteTitle">Quotation draft</h2><span class="tag">DEMO DATA</span><div id="draft"></div><div class="configuration"><h3>MOQ simulation</h3><p class="muted">Threshold starts at 24 pieces. Calculation basis is <strong>unconfirmed</strong>. Selections below apply to this demo only.</p><label>Demo threshold (pieces)<input id="threshold" type="number" min="1" max="9999" step="1" value="24"></label><label>Demo calculation basis<select id="basis"><option value="unconfirmed">Unconfirmed — choose for demo</option><option value="basket">Across the quotation</option><option value="product">Per product</option><option value="variant">Per size × colour variant</option></select></label></div><div id="eligibility" role="status" aria-live="polite"></div><button id="review" class="primary full">Review quotation</button><p class="muted">No prices, payment terms or shipment policies are assumed.</p></aside>
+</section>
+<details class="demo-controls"><summary>Demo state controls</summary><p>Preview loading, empty and error states without changing your selection.</p><div class="control-row"><button data-state="ready">Ready</button><button data-state="loading">Loading</button><button data-state="empty">Empty catalogue</button><button data-state="error">Catalogue error</button></div><label class="check"><input id="failRequest" type="checkbox"> Simulate quotation submission failure</label></details>
+</main>
+<footer><span class="brand">VK7<span>SPORTS</span></span><p>Phase 1 · Frontend demonstration · DEMO DATA</p></footer>
+<dialog id="productDialog" aria-labelledby="productTitle"><div id="productContent"></div></dialog>
+<dialog id="quoteDialog" aria-labelledby="summaryTitle"><div id="quoteContent"></div></dialog>
+<div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+<noscript><p>This interactive demo requires JavaScript.</p></noscript>
+</body></html>

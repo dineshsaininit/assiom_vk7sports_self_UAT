@@ -1,0 +1,11 @@
+# Draft gitleaks config for the VK7SPORTS-BACKEND repository (input to F1)
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Unmodified upstream Bagisto files with known false positives (verified tracked+unmodified 2026-10-21)"
+paths = [
+  '''app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest\.php''',
+  '''app/packages/Webkul/Installer/src/Data/demo-products\.json''',
+  '''app/public/llms-full\.txt''',
+]

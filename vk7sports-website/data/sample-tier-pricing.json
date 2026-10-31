@@ -1,0 +1,26 @@
+[
+  {
+    "id": "tier_bracket_1",
+    "name": "Standard Wholesale MOQ",
+    "min_quantity": 24,
+    "max_quantity": 49,
+    "discount_percentage": 0.0,
+    "notes": "Base wholesale tier requiring minimum 24 units"
+  },
+  {
+    "id": "tier_bracket_2",
+    "name": "Bulk Wholesale",
+    "min_quantity": 50,
+    "max_quantity": 99,
+    "discount_percentage": 10.0,
+    "notes": "Volume tier for academy and club orders"
+  },
+  {
+    "id": "tier_bracket_3",
+    "name": "Institutional Volume",
+    "min_quantity": 100,
+    "max_quantity": null,
+    "discount_percentage": 20.0,
+    "notes": "Highest volume bracket for tournament and institutional procurement"
+  }
+]

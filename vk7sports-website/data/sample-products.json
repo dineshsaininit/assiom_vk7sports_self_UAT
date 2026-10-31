@@ -1,0 +1,41 @@
+[
+  {
+    "id": "prod_apex_sublimation",
+    "name": "Apex Custom Sublimation Jersey",
+    "category_id": "cat_jerseys",
+    "base_wholesale_price": 799,
+    "compare_at_price": 1499,
+    "moq": 24,
+    "fabric": "100% Interlock Micro-Polyester (160 GSM)",
+    "colors": ["Royal Blue", "Crimson Red", "Pure White", "Jet Black", "Forest Green", "Navy"],
+    "sizes": ["S", "M", "L", "XL", "XXL"],
+    "is_sample_data": true,
+    "status": "SAMPLE_PLACEHOLDER"
+  },
+  {
+    "id": "prod_pro_football_jersey",
+    "name": "Pro Technical Match Jersey",
+    "category_id": "cat_jerseys",
+    "base_wholesale_price": 649,
+    "compare_at_price": 1199,
+    "moq": 24,
+    "fabric": "Jacquard Dri-Fit Breathable Knit (170 GSM)",
+    "colors": ["Navy", "White", "Red", "Yellow"],
+    "sizes": ["S", "M", "L", "XL"],
+    "is_sample_data": true,
+    "status": "SAMPLE_PLACEHOLDER"
+  },
+  {
+    "id": "prod_athletic_training_top",
+    "name": "VK7 Athletic Training Top",
+    "category_id": "cat_tshirts",
+    "base_wholesale_price": 499,
+    "compare_at_price": 899,
+    "moq": 24,
+    "fabric": "Honeycomb Honeycomb Mesh Poly-Spandex",
+    "colors": ["Charcoal Grey", "Navy", "Black", "Royal Blue"],
+    "sizes": ["S", "M", "L", "XL"],
+    "is_sample_data": true,
+    "status": "SAMPLE_PLACEHOLDER"
+  }
+]

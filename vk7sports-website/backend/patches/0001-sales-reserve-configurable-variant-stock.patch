@@ -1,0 +1,26 @@
+diff --git a/packages/Webkul/Sales/src/Repositories/OrderItemRepository.php b/packages/Webkul/Sales/src/Repositories/OrderItemRepository.php
+index d348228..92d84f1 100755
+--- a/packages/Webkul/Sales/src/Repositories/OrderItemRepository.php
++++ b/packages/Webkul/Sales/src/Repositories/OrderItemRepository.php
+@@ -116,11 +116,7 @@ public function manageInventory(OrderItem $orderItem): void
+                     ->lockForUpdate()
+                     ->first();
+ 
+-                if (isset($item->qty_ordered)) {
+-                    $qty = $item->qty_ordered;
+-                } else {
+-                    $qty = $item?->parent?->qty_ordered ?? 1;
+-                }
++                $qty = $item->qty_ordered ?: ($item->parent?->qty_ordered ?? 1);
+ 
+                 if (
+                     $available - ($orderedInventory->qty ?? 0) < $qty
+@@ -198,7 +194,7 @@ public function updateProductOrderedInventories(OrderItem $orderItem): void
+         $qty = (
+             $orderedInventory->qty + ($orderItem->qty_shipped ?? $orderItem->parent->qty_shipped)
+         ) - (
+-            $orderItem->qty_ordered ?? $orderItem->parent->qty_ordered
++            $orderItem->qty_ordered ?: $orderItem->parent?->qty_ordered
+         );
+ 
+         if ($qty < 0) {

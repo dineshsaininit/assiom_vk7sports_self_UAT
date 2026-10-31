@@ -1,0 +1,30 @@
+# VK7SPORTS backend — qa stack. All ports bound to 127.0.0.1. Fictional data only.
+# Credentials come from ../.env.docker (untracked). Never hard-code passwords here.
+# Distinct project name (vk7-backend-qa) so this never touches the original sandbox stacks or volumes.
+name: vk7-backend-qa
+services:
+  app:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    image: vk7-backend-php84:baseline
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    environment:
+      PHP_CLI_SERVER_WORKERS: "8"
+    ports: ["127.0.0.1:8100:8000"]
+    volumes: ["../app:/var/www/html", "./php-production.ini:/usr/local/etc/php/conf.d/zz-production.ini:ro"]
+    depends_on: [mysql, mailpit]
+  mysql:
+    # mysql 8.0.46 = server version recorded in qa/golden.sql.gz; multi-arch index digest
+    image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env.docker}
+      MYSQL_DATABASE: bagisto_qa
+      MYSQL_USER: ${MYSQL_USER:?set in .env.docker}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env.docker}
+    ports: ["127.0.0.1:33100:3306"]
+    volumes: ["qa-mysql:/var/lib/mysql"]
+  mailpit:
+    # v1.31.5 = latest release at sandbox build time (v1.31.6 published after); multi-arch index digest
+    image: axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
+    ports: ["127.0.0.1:8125:8025"]
+volumes:
+  qa-mysql:

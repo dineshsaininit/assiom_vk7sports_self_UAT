@@ -1,0 +1,47 @@
+# gitleaks per-finding ignore list (fingerprints). Scanning stays ENABLED.
+# Reviewed individually 2026-10-26 (Claude Code). All 18 findings sit in
+# UNMODIFIED upstream Bagisto 2.5.0 files (blob-identical to commit aaf52e5):
+#   CaptchaConfigurationTest.php L68  fake test string "AIzaSyD-test-api-key-123"
+#   CaptchaConfigurationTest.php L69  Google's public reCAPTCHA v2 *test* site key
+#   CaptchaConfigurationTest.php L127 fake test string ending "_NEW"
+#   public/llms-full.txt L17335       doc placeholder "Bearer YOUR_TOKEN_HERE"
+#   Installer/src/Data/demo-products.json (14 lines) product url_key slugs, e.g.
+#     "urban-slate-mens-grey-denim-jeans-28" (rule matched the word "key")
+# Each line pins commit/file/rule/line; any new or moved finding is still reported.
+# History-mode entries (commit:file:rule:line) + working-tree entries (file:rule:line).
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:127
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:68
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:69
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26581
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26778
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26975
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:27172
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:37692
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:37890
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38088
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38286
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38484
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38879
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39077
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39275
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39473
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39671
+aaf52e561529e024afbf3b08dfaff94cd957e3b7:app/public/llms-full.txt:curl-auth-header:17335
+backend/app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:127
+backend/app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:68
+backend/app/packages/Webkul/Admin/tests/Feature/Configuration/Customer/CaptchaConfigurationTest.php:generic-api-key:69
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26581
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26778
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:26975
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:27172
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:37692
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:37890
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38088
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38286
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38484
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:38879
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39077
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39275
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39473
+backend/app/packages/Webkul/Installer/src/Data/demo-products.json:generic-api-key:39671
+backend/app/public/llms-full.txt:curl-auth-header:17335

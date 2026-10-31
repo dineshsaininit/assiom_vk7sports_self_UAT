@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VK7SPORTS - Admin Portal Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --navy-primary: #0A1121;
+            --navy-secondary: #131D33;
+            --navy-light: #1E2B48;
+            --red-accent: #E31B23;
+            --bg-light: #F8FAFC;
+            --white: #FFFFFF;
+            --text-dark: #0F172A;
+            --text-muted: #64748B;
+            --border-color: #E2E8F0;
+            
+            /* Metric accents */
+            --green-bg: #DCFCE7;
+            --green-icon: #16A34A;
+            --pink-bg: #FCE7F3;
+            --pink-icon: #EC4899;
+            --blue-bg: #E0F2FE;
+            --blue-icon: #0284C7;
+            
+            /* Chart colors */
+            --chart-navy: #0A1121;
+            --chart-blue: #2563EB;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        h1, h2, h3, .logo-text {
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        /* --- TOP NAVIGATION BAR --- */
+        .top-navbar {
+            background-color: var(--navy-primary);
+            color: var(--white);
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 1.4rem;
+            cursor: pointer;
+        }
+
+        .logo-text {
+            font-size: 1.4rem;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            text-transform: uppercase;
+        }
+
+        .logo-text span {
+            color: var(--red-accent);
+        }
+
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+
+        .top-icon {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.2rem;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .top-icon.has-badge::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background-color: var(--red-accent);
+            border-radius: 50%;
+        }
+
+        /* --- MAIN LAYOUT STRUCTURE --- */
+        .dashboard-body {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+
+        /* --- SIDEBAR NAVIGATION --- */
+        sidebar {
+            width: 240px;
+            background-color: var(--navy-primary);
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            flex-direction: column;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 0.85rem 1.5rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-item:hover {
+            color: var(--white);
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .sidebar-item.active {
+            background-color: var(--red-accent);
+            color: var(--white);
+            font-weight: 600;
+        }
+
+        .sidebar-icon {
+            font-size: 1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Overlay for Mobile Sidebar */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 900;
+        }
+
+        /* --- MAIN CONTENT AREA --- */
+        main {
+            flex: 1;
+            padding: 2.5rem 3rem;
+            background-color: var(--bg-light);
+            width: 100%;
+        }
+
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 2rem;
+        }
+
+        /* --- KPI STAT CARDS --- */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .kpi-card {
+            background-color: var(--white);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .kpi-info .kpi-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-info .kpi-value {
+            font-size: 1.85rem;
+            font-weight: 800;
+            font-family: 'Montserrat', sans-serif;
+            color: var(--text-dark);
+            line-height: 1.1;
+            margin-bottom: 0.4rem;
+        }
+
+        .kpi-info .kpi-subtext {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .kpi-icon-wrapper {
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .kpi-card.sales .kpi-icon-wrapper {
+            background-color: var(--green-bg);
+            color: var(--green-icon);
+        }
+
+        .kpi-card.orders .kpi-icon-wrapper {
+            background-color: var(--pink-bg);
+            color: var(--pink-icon);
+        }
+
+        .kpi-card.enquiry .kpi-icon-wrapper {
+            background-color: var(--blue-bg);
+            color: var(--blue-icon);
+        }
+
+        /* --- CHART SECTION --- */
+        .chart-container {
+            background-color: var(--white);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            gap: 1rem;
+        }
+
+        .chart-header h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: capitalize;
+        }
+
+        .chart-dropdown {
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text-dark);
+            background-color: var(--white);
+            outline: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        /* BAR CHART SVG STYLING */
+        .chart-wrapper {
+            width: 100%;
+            height: 320px;
+            overflow-x: auto;
+        }
+
+        svg.bar-chart {
+            width: 100%;
+            min-width: 600px;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .grid-line {
+            stroke: #F1F5F9;
+            stroke-width: 1;
+        }
+
+        .y-axis-text, .x-axis-text {
+            font-size: 11px;
+            fill: #94A3B8;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .bar-navy {
+            fill: var(--chart-navy);
+            rx: 1;
+        }
+
+        .bar-blue {
+            fill: var(--chart-blue);
+            rx: 1;
+        }
+
+        /* --- MEDIA QUERIES FOR MOBILE COMPATIBILITY --- */
+        @media (max-width: 992px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            sidebar {
+                position: fixed;
+                top: 64px;
+                left: 0;
+                bottom: 0;
+                z-index: 1000;
+                transform: translateX(-100%);
+                box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            }
+
+            sidebar.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-overlay.open {
+                display: block;
+            }
+
+            main {
+                padding: 1.5rem 1.25rem;
+            }
+
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-container {
+                padding: 1.25rem 1rem;
+            }
+
+            .chart-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .chart-dropdown {
+                width: 100%;
+            }
+
+            .page-title {
+                font-size: 1.4rem;
+                margin-bottom: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP NAVBAR -->
+    <div class="top-navbar">
+        <div class="nav-left">
+            <button class="mobile-menu-btn" id="menuToggle" aria-label="Toggle Navigation">☰</button>
+            <div class="logo-text">VK7<span>SPORTS</span></div>
+        </div>
+        <div class="top-actions">
+            <span class="top-icon">☆</span>
+            <span class="top-icon has-badge">🔔</span>
+        </div>
+    </div>
+
+    <div class="dashboard-body">
+        <!-- MOBILE OVERLAY -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- SIDEBAR -->
+        <sidebar id="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item active">
+                    <span class="sidebar-icon">⊞</span> Dashboard
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">📑</span> Section
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">⚙</span> Product
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">🛍</span> Product Management
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">👥</span> User Management
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">🏷</span> Order Management
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">✉</span> Bulk Enquiries
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">📢</span> Promotions
+                </li>
+                <li class="sidebar-item">
+                    <span class="sidebar-icon">📊</span> Reports
+                </li>
+            </ul>
+        </sidebar>
+
+        <!-- MAIN DASHBOARD CONTENT -->
+        <main>
+            <h1 class="page-title">Dashboard</h1>
+
+            <!-- KPI STAT CARDS -->
+            <div class="kpi-grid">
+                <div class="kpi-card sales">
+                    <div class="kpi-info">
+                        <div class="kpi-label">Sales</div>
+                        <div class="kpi-value">3.85K</div>
+                        <div class="kpi-subtext">Total Sales trends</div>
+                    </div>
+                    <div class="kpi-icon-wrapper">📈</div>
+                </div>
+
+                <div class="kpi-card orders">
+                    <div class="kpi-info">
+                        <div class="kpi-label">Orders</div>
+                        <div class="kpi-value">37</div>
+                        <div class="kpi-subtext">Orders &amp; orders</div>
+                    </div>
+                    <div class="kpi-icon-wrapper">🛒</div>
+                </div>
+
+                <div class="kpi-card enquiry">
+                    <div class="kpi-info">
+                        <div class="kpi-label">Bulk Enquiry</div>
+                        <div class="kpi-value">0</div>
+                        <div class="kpi-subtext">Bulk Companies</div>
+                    </div>
+                    <div class="kpi-icon-wrapper">📝</div>
+                </div>
+            </div>
+
+            <!-- CHART CONTAINER -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2>30-day sales trends</h2>
+                    <select class="chart-dropdown">
+                        <option>30-day index</option>
+                        <option>7-day index</option>
+                        <option>Yearly index</option>
+                    </select>
+                </div>
+
+                <div class="chart-wrapper">
+                    <svg class="bar-chart" viewBox="0 0 1000 300" preserveAspectRatio="none">
+                        <!-- Background Grid Lines & Y-Axis Labels -->
+                        <g class="grid-group">
+                            <line x1="40" y1="20" x2="1000" y2="20" class="grid-line" />
+                            <text x="10" y="24" class="y-axis-text">160</text>
+
+                            <line x1="40" y1="70" x2="1000" y2="70" class="grid-line" />
+                            <text x="10" y="74" class="y-axis-text">140</text>
+
+                            <line x1="40" y1="120" x2="1000" y2="120" class="grid-line" />
+                            <text x="10" y="124" class="y-axis-text">120</text>
+
+                            <line x1="40" y1="170" x2="1000" y2="170" class="grid-line" />
+                            <text x="10" y="174" class="y-axis-text">100</text>
+
+                            <line x1="40" y1="220" x2="1000" y2="220" class="grid-line" />
+                            <text x="10" y="224" class="y-axis-text">80</text>
+
+                            <line x1="40" y1="270" x2="1000" y2="270" class="grid-line" />
+                            <text x="10" y="274" class="y-axis-text">0</text>
+                        </g>
+
+                        <!-- Bars Group (Paired Navy/Blue per Month) -->
+                        <g class="bars-group">
+                            <!-- Jan -->
+                            <rect x="65" y="165" width="12" height="105" class="bar-navy"></rect>
+                            <rect x="80" y="210" width="12" height="60" class="bar-blue"></rect>
+
+                            <!-- Feb -->
+                            <rect x="145" y="170" width="12" height="100" class="bar-navy"></rect>
+                            <rect x="160" y="195" width="12" height="75" class="bar-blue"></rect>
+
+                            <!-- Mar -->
+                            <rect x="225" y="100" width="12" height="170" class="bar-navy"></rect>
+                            <rect x="240" y="190" width="12" height="80" class="bar-blue"></rect>
+
+                            <!-- Apr -->
+                            <rect x="305" y="155" width="12" height="115" class="bar-navy"></rect>
+                            <rect x="320" y="210" width="12" height="60" class="bar-blue"></rect>
+
+                            <!-- May -->
+                            <rect x="385" y="145" width="12" height="125" class="bar-navy"></rect>
+                            <rect x="400" y="195" width="12" height="75" class="bar-blue"></rect>
+
+                            <!-- Jun -->
+                            <rect x="465" y="170" width="12" height="100" class="bar-navy"></rect>
+                            <rect x="480" y="130" width="12" height="140" class="bar-blue"></rect>
+
+                            <!-- Jul -->
+                            <rect x="545" y="165" width="12" height="105" class="bar-navy"></rect>
+                            <rect x="560" y="210" width="12" height="60" class="bar-blue"></rect>
+
+                            <!-- Aug -->
+                            <rect x="625" y="160" width="12" height="110" class="bar-navy"></rect>
+                            <rect x="640" y="200" width="12" height="70" class="bar-blue"></rect>
+
+                            <!-- Sep -->
+                            <rect x="705" y="135" width="12" height="135" class="bar-navy"></rect>
+                            <rect x="720" y="210" width="12" height="60" class="bar-blue"></rect>
+
+                            <!-- Oct -->
+                            <rect x="785" y="140" width="12" height="130" class="bar-navy"></rect>
+                            <rect x="800" y="190" width="12" height="80" class="bar-blue"></rect>
+
+                            <!-- Nov -->
+                            <rect x="865" y="125" width="12" height="145" class="bar-navy"></rect>
+                            <rect x="880" y="210" width="12" height="60" class="bar-blue"></rect>
+
+                            <!-- Dec -->
+                            <rect x="945" y="80" width="12" height="190" class="bar-navy"></rect>
+                            <rect x="960" y="165" width="12" height="105" class="bar-blue"></rect>
+                        </g>
+
+                        <!-- X-Axis Labels -->
+                        <g class="x-axis-group">
+                            <text x="70" y="292" class="x-axis-text">Jan</text>
+                            <text x="150" y="292" class="x-axis-text">Feb</text>
+                            <text x="230" y="292" class="x-axis-text">Mar</text>
+                            <text x="310" y="292" class="x-axis-text">Apr</text>
+                            <text x="388" y="292" class="x-axis-text">May</text>
+                            <text x="470" y="292" class="x-axis-text">Jun</text>
+                            <text x="552" y="292" class="x-axis-text">Jul</text>
+                            <text x="630" y="292" class="x-axis-text">Aug</text>
+                            <text x="712" y="292" class="x-axis-text">Sep</text>
+                            <text x="792" y="292" class="x-axis-text">Oct</text>
+                            <text x="870" y="292" class="x-axis-text">Nov</text>
+                            <text x="950" y="292" class="x-axis-text">Dec</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Mobile Drawer Toggle Script -->
+    <script>
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+        function toggleMenu() {
+            sidebar.classList.toggle('open');
+            sidebarOverlay.classList.toggle('open');
+        }
+
+        menuToggle.addEventListener('click', toggleMenu);
+        sidebarOverlay.addEventListener('click', toggleMenu);
+    </script>
+</body>
+</html>

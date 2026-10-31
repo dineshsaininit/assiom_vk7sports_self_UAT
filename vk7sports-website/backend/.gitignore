@@ -1,0 +1,27 @@
+# Draft .gitignore for the VK7SPORTS-BACKEND repository (input to F1; not applied anywhere yet)
+# Secrets and local config
+.env
+.env.*
+!.env.example
+!.env.docker.example
+.secrets/
+.local-secrets/
+app/.env
+# Regenerable / sensitive runtime state
+app/vendor/
+app/node_modules/
+app/storage/logs/
+app/storage/debugbar/
+app/storage/framework/
+app/storage/race-order.json
+app/storage/repo_race.php
+app/bootstrap/cache/*.php
+app/public/storage
+# Tool residue
+**/__pycache__/
+.gstack/
+.DS_Store
+# Large/binary dumps other than the approved QA seed (F4 decides)
+*.sql.gz
+!qa/golden.sql.gz
+!evidence/**/db-before-fix.sql.gz

@@ -1,0 +1,30 @@
+diff --git a/packages/Webkul/Admin/src/Http/Controllers/Sales/ShipmentController.php b/packages/Webkul/Admin/src/Http/Controllers/Sales/ShipmentController.php
+index 9d2fe85..89e5cb7 100755
+--- a/packages/Webkul/Admin/src/Http/Controllers/Sales/ShipmentController.php
++++ b/packages/Webkul/Admin/src/Http/Controllers/Sales/ShipmentController.php
+@@ -126,18 +126,19 @@ public function isInventoryValidate(&$data)
+ 
+                 if ($orderItem->getTypeInstance()->isComposite()) {
+                     foreach ($orderItem->children as $child) {
+-                        if (! $child->qty_ordered) {
+-                            continue;
+-                        }
+-
+-                        $finalQty = ($child->qty_ordered / $orderItem->qty_ordered) * $qty;
++                        $finalQty = $child->qty_ordered
++                            ? ($child->qty_ordered / $orderItem->qty_ordered) * $qty
++                            : $qty;
+ 
+                         $availableQty = $child->product->inventories()
+                             ->where('inventory_source_id', $inventorySourceId)
+                             ->sum('qty');
+ 
+                         if (
+-                            $child->qty_to_ship < $finalQty
++                            (
++                                $child->qty_ordered
++                                && $child->qty_to_ship < $finalQty
++                            )
+                             || $availableQty < $finalQty
+                         ) {
+                             return false;

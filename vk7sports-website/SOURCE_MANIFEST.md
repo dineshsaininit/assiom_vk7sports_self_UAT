@@ -1,0 +1,52 @@
+# SOURCE MANIFEST — VK7SPORTS CANONICAL WORKSPACE
+
+**Manifest Date:** 11 October 2026 (Updated with Intern Submissions & GitHub Reconciliation)  
+**Auditor:** VK7SPORTS Project Forensic Auditor (AASIOM Technologies)  
+**Workspace:** `/Users/aasiom/PROJECTS/VK7SPORTS-CANONICAL/`  
+**Purpose:** Cryptographic and forensic provenance ledger ensuring every consolidated file remains 100% traceable to its original location, repository, and commit.
+
+---
+
+## Provenance Ledger
+
+| CANONICAL LOCATION | ORIGINAL LOCATION | SOURCE REPOSITORY | SOURCE BRANCH / COMMIT | CLASSIFICATION | COPY DATE | FORENSIC NOTES |
+|---|---|---|---|---|---|---|
+| `app/README.md` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/README.md` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL CODE** | 2026-10-10 | Original README by Nooruzma Khan. |
+| `app/VK7SPORTS_Prototype/HomePage.html` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/VK7SPORTS_Prototype/HomePage.html` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL CODE** | 2026-10-10 | Static landing page wireframe (736 lines). Unsplash images. |
+| `app/VK7SPORTS_Prototype/ShopPage.html` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/VK7SPORTS_Prototype/ShopPage.html` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL CODE** | 2026-10-10 | Static shop wireframe (1,023 lines, 200 KB with base64 images). |
+| `app/VK7SPORTS_Prototype/custom-teamwear.html` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/VK7SPORTS_Prototype/custom-teamwear.html` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL CODE** | 2026-10-10 | Client DOM customizer preview (1,096 lines). |
+| `app/VK7SPORTS_Prototype/AdminDashboardPage.html` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/VK7SPORTS_Prototype/AdminDashboardPage.html` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL CODE** | 2026-10-10 | Unauthenticated admin dashboard shell (598 lines). |
+| `app/VK7SPORTS_Prototype/VK7SPORTS_Prototype_Description_Report.docx` | `PROJECTS/FREELANCE/VK7SPORTS/repo-audit/VK7SPORTS_Prototype/VK7SPORTS_Prototype_Description_Report.docx` | `Anvora-Global/vk7sports-website` | `main` @ `7308e0e` | **CANONICAL DOC** | 2026-10-10 | Original prototype walkthrough docx submitted by developer. |
+| `docs/intern-submissions/Task1_VK7SPORTS_Prototype_Walkthrough.docx` | `PROJECTS/FREELANCE/VK7SPORTS/02_PROTOTYPES/Task1_VK7SPORTS_Prototype_Walkthrough.docx` | None (Local doc) | N/A (2026-09-14) | **INTERN SUBMISSION** | 2026-10-11 | Preserved base equivalent of Task 1. Covers B2B wholesale. |
+| `docs/intern-submissions/Task1_VK7SPORTS_Prototype_Walkthrough(2).docx` | `Downloads/Task1_VK7SPORTS_Prototype_Walkthrough(2).docx` | Transferred from ChatGPT | N/A (2026-10-11) | **INTERN SUBMISSION** | 2026-10-11 | Exact (2) submission (2.19 MB). Verified IDENTICAL to base document. |
+| `docs/intern-submissions/Task_2_Backend_Plan.docx` | `PROJECTS/FREELANCE/VK7SPORTS/03_BACKEND_PLAN/Task_2_Backend_Plan.docx` | None (Local doc) | N/A (2026-09-14) | **INTERN SUBMISSION** | 2026-10-11 | Preserved base equivalent of Task 2. Covers PostgreSQL API blueprint. |
+| `docs/intern-submissions/Task_2_Backend_Plan(2).docx` | `Downloads/Task_2_Backend_Plan(2).docx` | Transferred from ChatGPT | N/A (2026-10-11) | **INTERN SUBMISSION** | 2026-10-11 | Exact (2) submission (3.13 MB). Verified IDENTICAL to base document. |
+| `docs/intern-submissions/INTERN_WORK_REGISTER.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **AUDIT LEDGER** | 2026-10-11 | Comprehensive register of all intern deliverables and history. |
+| `docs/intern-submissions/INTERN_SUBMISSION_ANALYSIS.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **AUDIT ANALYSIS** | 2026-10-11 | Detailed claim-by-claim verification of Task 1 and Task 2. |
+| `docs/requirements/Task1_VK7SPORTS_Prototype_Walkthrough.docx` | `PROJECTS/FREELANCE/VK7SPORTS/02_PROTOTYPES/Task1_VK7SPORTS_Prototype_Walkthrough.docx` | None (Local doc) | N/A (2026-09-14) | **CURRENT REQUIREMENT** | 2026-10-10 | Authoritative revised B2B walkthrough (24 MOQ, 4 categories). |
+| `docs/requirements/REQUIREMENT_CONFLICT_REGISTER.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **CONFLICT REGISTER** | 2026-10-11 | Catalogs RC-01 through RC-10 conflicts needing Om's decision. |
+| `docs/requirements/Pre-Discovery Draft.docx` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/Pre-Discovery Draft.docx` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | Pre-discovery executive business case v1.0. |
+| `docs/requirements/VK7SPORTS_Website_Strategy_Audit.md` | `Documents/Claude/Projects/RAKSHA/VK7SPORTS/VK7SPORTS_Website_Strategy_Audit.md` | None (Local doc) | N/A (2026-07-28) | **HISTORICAL DOC** | 2026-10-10 | Pre-design strategy audit referencing wildshark-b2b.com. |
+| `docs/architecture/Task_2_Backend_Plan.docx` | `PROJECTS/FREELANCE/VK7SPORTS/03_BACKEND_PLAN/Task_2_Backend_Plan.docx` | None (Local doc) | N/A (2026-09-14) | **CURRENT TECH PLAN** | 2026-10-10 | Authoritative Task 2 backend blueprint. |
+| `docs/architecture/Enterprise Information Architecture.docx` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/Enterprise Information Architecture.docx` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | 6-layer enterprise IA planning draft. |
+| `docs/architecture/Premium_Apparel_Project_Master_Blueprint_v1.0.docx` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/Premium_Apparel_Project_Master_Blueprint_v1.0.docx` | None (Local doc) | N/A (2026-08-01) | **HISTORICAL DOC** | 2026-10-10 | Phase A strategic foundation blueprint (NestJS/Medusa). |
+| `docs/architecture/VK7SPORTS_MODEL4_ARCHITECTURE_V1.md` | `PROJECTS/FREELANCE/VK7SPORTS/04_AUDITS/VK7SPORTS_MODEL4_ARCHITECTURE_V1.md` | None (Local doc) | N/A (2026-09-26) | **CURRENT/PROVISIONAL** | 2026-10-10 | Modular Monolith architecture draft (Next.js/Drizzle/PG). |
+| `docs/technical-plans/02_Original_DB_Schema.docx` | `PROJECTS/AASIOM/.../VK7SPORTS_Backend_Complete_Chat_Package/02_Original_DB_Schema.docx` | None (Local doc) | N/A (2026-08-10) | **HISTORICAL DOC** | 2026-10-10 | 25-page intern database schema specification. |
+| `docs/execution-plans/VK7SPORTS_ProjectLead_Handbook_Pradnya_Gaikwad_v1.0.docx` | `Documents/Claude/Projects/RAKSHA/VK7SPORTS_ProjectLead_Handbook_Pradnya_Gaikwad_v1.0.docx` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | Project lead operating manual for Pradnya Gaikwad. |
+| `docs/execution-plans/PRADNYA.pdf` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/PRADNYA.pdf` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | PDF export of Project Lead Operating Handbook. |
+| `docs/execution-plans/BUSINESS OPERATING SYSTEM.docx` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/BUSINESS OPERATING SYSTEM.docx` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | Master operational blueprint v1.0. |
+| `docs/execution-plans/Phase 2 — Enterprise Planning.docx` | `PROJECTS/FREELANCE/VK7SPORTS/01_CLIENT_REQUIREMENTS/Phase 2 — Enterprise Planning.docx` | None (Local doc) | N/A (2026-07-29) | **HISTORICAL DOC** | 2026-10-10 | Enterprise planning documentation proposal. |
+| `docs/intern-manuals/VK7SPORTS_Backend_Improvement_Manual.pdf` | `PROJECTS/FREELANCE/VK7SPORTS/03_BACKEND_PLAN/VK7SPORTS_Backend_Improvement_Manual.pdf` | None (Local doc) | N/A (2026-08-10) | **HISTORICAL DOC** | 2026-10-10 | Senior architectural review manual guiding intern changes. |
+| `docs/intern-manuals/04_Chat_Record_and_Package_Index.txt` | `PROJECTS/AASIOM/.../VK7SPORTS_Backend_Complete_Chat_Package/04_Chat_Record_and_Package_Index.txt` | None (Local doc) | N/A (2026-09-10) | **HISTORICAL DOC** | 2026-10-10 | Package index of backend review deliverables. |
+| `design/diagrams/vk7sports_ER_Diagram.pdf` | `PROJECTS/FREELANCE/VK7SPORTS/03_BACKEND_PLAN/vk7sports_ER_Diagram.pdf` | None (Local doc) | N/A (2026-08-10) | **HISTORICAL DIAGRAM** | 2026-10-10 | Visual Entity Relationship Diagram created by intern. |
+| `design/ui-references/VK7SPORTS_Figma_UIUX_Spec.md` | `Documents/Claude/Projects/RAKSHA/VK7SPORTS/VK7SPORTS_Figma_UIUX_Spec.md` | None (Local doc) | N/A (2026-07-28) | **HISTORICAL SPEC** | 2026-10-10 | UI/UX tokens, layout variables, and screen specs for Figma. |
+| `audit/GITHUB_REPOSITORY_COMPARISON.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **AUDIT ANALYSIS** | 2026-10-11 | Deep comparison of Anvora-Global and AASIOM8 repositories. |
+| `audit/01_VK7SPORTS_EXECUTIVE_SUMMARY.md` to `13_VK7SPORTS_EVIDENCE_INDEX.md` | `VK7SPORTS_AUDIT_2026-10-10/*.md` | None (Audit tool) | N/A (2026-10-10) | **CURRENT AUDIT** | 2026-10-10 | Complete 13-document forensic audit suite. |
+| `audit/UNMERGED_UNIQUE_WORK.md` | `.gemini/antigravity-ide/scratch/vk7sports-website/` | None (Scratch tree) | Uncommitted (2026-08-31) | **DIVERGENCE REGISTER**| 2026-10-10 | Details unmerged link edits and untracked `index.html`. |
+| `audit/GIT_PRESERVATION_STRATEGY.md` | New forensic artifact | AGY Auditor | N/A (2026-10-10) | **AUDIT STRATEGY** | 2026-10-10 | Outlines history preservation without flattening. |
+| `archive-reference/MANIFEST_INTERN_BACKEND_PACKAGE.md` | `05_HANDOFFS/VK7SPORTS_Backend_Complete_Chat_Package.zip` | None (Archive ZIP) | N/A (2026-09-10) | **ARCHIVE MANIFEST** | 2026-10-10 | Manifest reference to 3.2MB chat archive. |
+| `archive-reference/MANIFEST_MULTI_MODEL_DELIBERATIONS.md` | `PROJECTS/FREELANCE/VK7SPORTS/04_AUDITS/` & `06_MODEL6/` | None (Debate corpus) | N/A (2026-09-27) | **ARCHIVE MANIFEST** | 2026-10-10 | Manifest reference to 159 multi-model debate files. |
+| `archive-reference/MANIFEST_MIGRATION_WORKSPACE.md` | `AASIOM8-GITHUB-MIGRATION-WORKSPACE/` | `AASIOM8` Migration | N/A (2026-09-14) | **ARCHIVE MANIFEST** | 2026-10-10 | Manifest reference to organization migration logs. |
+| `audit/VK7SPORTS_GITHUB_VERIFICATION_REPORT.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **VERIFICATION REPORT** | 2026-10-11 | Mandatory 13-point remote verification gate evaluation (FAIL/BLOCKED on missing intern (2) files). |
+| `audit/VK7SPORTS_MAC_DELETION_MANIFEST.md` | New forensic artifact | AGY Auditor | N/A (2026-10-11) | **DELETION LEDGER** | 2026-10-11 | Comprehensive pre-approved deletion manifest; all deletions held pending gate pass. |
+

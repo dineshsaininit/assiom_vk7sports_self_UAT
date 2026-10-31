@@ -1,0 +1,109 @@
+[
+  {
+    "copy": "qa/tools/admin_2fa.py",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/admin_2fa.py",
+    "original_sha256": "7da5c8b3590f68eca19c5030f0d2524d91f178571256e8cfdc692177bef09d50",
+    "copy_sha256": "676331c9c50513c17cf3af4da489dd50d0c34c7464a76d2afb422ff14c3daaf4",
+    "note": "staff credential literal at line 183 parameterized 2026-10-21 (missed in first F8 pass)"
+  },
+  {
+    "copy": "qa/tools/admin_login.py",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/admin_login.py",
+    "original_sha256": "7aa7b2c489feda63d20a633ed49f3edbb90c9f5a18cb3761862ead2345df0335",
+    "copy_sha256": "459efd20da74c2c9d466386e6274b5e26deefb2a81617f74da039ee5969dd032"
+  },
+  {
+    "copy": "qa/tools/bruteforce.py",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/bruteforce.py",
+    "original_sha256": "ab4897f8f246b8bb813eaef3f05a6dcd76142dd17ebabaa60e4e6f1bb815301c",
+    "copy_sha256": "de3bd4001528ec24c2b4963fbdc26bf16e8fcc7604f1c15c4169bdbab715784a"
+  },
+  {
+    "copy": "qa/tools/e2e_workflow.py",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/e2e_workflow.py",
+    "original_sha256": "80a3ab8c1f7b5ca3b234ae5a796ddda8b2ba8a421b4f1ed93db5801df03371aa",
+    "copy_sha256": "4557f0630edb0ebab9dc257d3e03a72187a20fb59a944fc45b2b49d6c44184a2"
+  },
+  {
+    "copy": "qa/tools/security_regression.py",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/security_regression.py",
+    "original_sha256": "4142152a4462f2d4a30b75949a50fa8d8fc817f7c11b84026cf2546fe37d9ea6",
+    "copy_sha256": "7da5973f029ce07b7f033079b51dc27beebe3fc0f76411bd77face98567109f1"
+  },
+  {
+    "copy": "qa/tools/exposure.sh",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/exposure.sh",
+    "original_sha256": "bb983a27111618bb3660808667d2e9e9bb27205a7a3b301dbee2ffc871d3da80",
+    "copy_sha256": "1dab6a5ae831650b0f849f8bcee0d028fcf29f18eb3dbedf944b7f6696027950"
+  },
+  {
+    "copy": "qa/tools/make_buyers.php",
+    "original": "~/SANDBOX/bagisto-b2b-eval/tests/make_buyers.php",
+    "original_sha256": "0bf2493f7fa0cd510ebe4209826ad4eaeda3321f80b672d1ff0957be930f8a0d",
+    "copy_sha256": "4629e5a6a2aac8037791e27124f2b589bf23a3848a8dc7332665895fa03cd2e2"
+  },
+  {
+    "copy": "qa/tools/order_driver.py",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/order_driver.py",
+    "original_sha256": "82faa6fbe6b9a0c0c40eb74024ef089b2d2bc421751a431ed5ee03d208925287",
+    "copy_sha256": "2b5ce7908c3fa0150a9a326e7e3bceb90a2bf71c31aaba76db51fad958e0e8da"
+  },
+  {
+    "copy": "qa/tools/make_fixtures.py",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/make_fixtures.py",
+    "original_sha256": "341fdf121b0007c7c5ffd009b5564437627fd69c6d0b1b5c9b160a06f52e686f",
+    "copy_sha256": "00d79c9b583c14ebcfecaf452110b50b42f6d38147d8431fb2fdfeae97d2bd30"
+  },
+  {
+    "copy": "qa/tools/repo_race.php",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/repo_race.php",
+    "original_sha256": "f00e0b9fb7b77c603e82184ca67bfb7aee26384a23c3cf4011dd38f302017508",
+    "copy_sha256": "f00e0b9fb7b77c603e82184ca67bfb7aee26384a23c3cf4011dd38f302017508"
+  },
+  {
+    "copy": "qa/tools/repo_race.sh",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/repo_race.sh",
+    "original_sha256": "62fdba56aaec82c5b3bc79a334b01764b6b3cad4f00170860b52022672ed697f",
+    "copy_sha256": "16aa236e2e89daa949d5d74978ed347bef9c0f5ef712e41e29e855a7a60f9922"
+  },
+  {
+    "copy": "qa/tools/set_moq.sh",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/set_moq.sh",
+    "original_sha256": "036a13f2189b5238eca795b2237554d7b1980479d5a8f7d7e9e6ca15e5bf9712",
+    "copy_sha256": "dd801be7c70164942016797b0a144619790284a5b996dbbedfa591a84d707c58"
+  },
+  {
+    "copy": "qa/tools/stock.sh",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/stock.sh",
+    "original_sha256": "587c5f21da4e6cc66b1bbf5d737f8ee613dbb81c24f947d2a56c146b2c4d1731",
+    "copy_sha256": "49810303e0bba445a5ee08fb124b750024ecffca50ce1a1a9797960ac43aa8d1"
+  },
+  {
+    "copy": "qa/reset.sh",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/reset.sh",
+    "original_sha256": "4c84c283b364868b168bf7e216217fd380a088454ae213ff4871b7ddb4a3116c",
+    "copy_sha256": "2f7794a10c2fe5ad3a44bcb243ff9a66743e95f20ccca8129c4e5951af7f118c"
+  },
+  {
+    "copy": "qa/sanitize.sql",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/sanitize.sql",
+    "original_sha256": "a1a0011739e22a5ce1eed0136ee07e42263c7e212a8a112d8de94f55b3c5b21a",
+    "copy_sha256": "a1a0011739e22a5ce1eed0136ee07e42263c7e212a8a112d8de94f55b3c5b21a"
+  },
+  {
+    "copy": "qa/acceptance_preflight.py",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/acceptance_preflight.py",
+    "original_sha256": "839495bed860c30ae27163f16497fd5c8ab31fa437cf0e803c3e6063866ac7ad",
+    "copy_sha256": "bee5b377d12d987e51b3d51125f2ec51db9f47bc6d8b6d06594f6f43d0f9a2f5"
+  },
+  {
+    "copy": "qa/tools/q.sh",
+    "original": "~/SANDBOX/bagisto-qa-codex/qa/tools/q.sh (rewritten)",
+    "copy_sha256": "0d2cfc0874b2509598ea5cc8805cb028c0eb7991698b4a955fbd71d1133813b4"
+  },
+  {
+    "copy": "qa/tools/vk7env.py",
+    "original": "(new)",
+    "copy_sha256": "e6ae8d40261aeaa7fabf7692ae7099d4790ab3e6190051e5f9b5a5579d3354a1"
+  }
+]

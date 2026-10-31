@@ -1,0 +1,30 @@
+[
+  {
+    "id": "cat_jerseys",
+    "name": "Jerseys",
+    "slug": "jerseys",
+    "description": "High-performance sublimation and knitted match jerseys",
+    "moq_default": 24
+  },
+  {
+    "id": "cat_pants",
+    "name": "Pants / Track Pants",
+    "slug": "pants",
+    "description": "Technical athletic training pants and track pants",
+    "moq_default": 24
+  },
+  {
+    "id": "cat_shorts",
+    "name": "Shorts",
+    "slug": "shorts",
+    "description": "Dri-fit athletic performance and team shorts",
+    "moq_default": 24
+  },
+  {
+    "id": "cat_tshirts",
+    "name": "T-Shirts / Training Tops",
+    "slug": "t-shirts",
+    "description": "Pre-match warm up and athletic training tops",
+    "moq_default": 24
+  }
+]

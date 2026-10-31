@@ -1,0 +1,72 @@
+# VK7SPORTS — Canonical Workspace .gitignore
+
+# OS Metadata & Thumbnails
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dependencies & Package Managers
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+
+# Build Outputs & Bundlers
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.turbo/
+.vercel/
+
+# Environment Variables & Credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa
+id_ecdsa
+id_ed25519
+*.pfx
+*.p12
+
+# Logs & Runtime Diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & IDE Directories
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary & Scratch Files
+*.tmp
+*.temp
+scratch/
+tmp/
+
+# Large Binary Archives (Referenced in manifests instead)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z

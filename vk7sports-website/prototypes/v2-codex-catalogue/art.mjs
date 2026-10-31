@@ -1,0 +1,5 @@
+// Original local SVG illustrations; fictional garments, no external assets.
+export function garment(p) {
+ const paths={tee:'M67 42 L101 27 Q120 48 139 27 L173 42 L199 91 L166 108 L154 84 L154 216 L86 216 L86 84 L74 108 L41 91 Z',vest:'M82 39 L101 27 Q120 48 139 27 L158 39 L149 93 L156 216 L84 216 L91 93 Z',jacket:'M67 42 L102 25 L120 40 L138 25 L173 42 L207 177 L174 185 L152 94 L154 216 L86 216 L88 94 L66 185 L33 177 Z',shorts:'M72 65 L168 65 L182 193 L126 193 L120 120 L114 193 L58 193 Z',pants:'M77 30 L163 30 L169 232 L126 232 L120 98 L114 232 L71 232 Z'};
+ return `<svg viewBox="0 0 240 260" role="img" aria-label="Fictional ${p.name} illustration"><path d="${paths[p.kind]}" fill="${p.color}" stroke="#14212b" stroke-opacity=".25" stroke-width="2"/><path d="M87 66 L153 66" stroke="${p.accent}" stroke-width="8"/>${p.kind==='jacket'?'<path d="M120 42V214" stroke="#fff" stroke-width="2"/>':''}<path d="M94 204 H146" stroke="${p.accent}" stroke-width="3"/><path d="M98 90L96 187M143 90L145 187" stroke="#fff" stroke-opacity=".08" stroke-width="2"/></svg>`;
+}

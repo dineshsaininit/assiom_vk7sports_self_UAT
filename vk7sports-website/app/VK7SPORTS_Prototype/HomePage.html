@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VK7SPORTS - Gear Up For The Season</title>
+    <!-- Modern sans-serif fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Branding colors from mockup */
+            --navy-primary: #0A1121; /* Rich navy for header and text */
+            --red-accent: #E31B23; /* Electric red for highlights */
+            --bg-light: #F5F5F5; /* Light grey section contrast */
+            --white: #FFFFFF;
+            --text-on-navy: rgba(255, 255, 255, 0.9);
+            --text-dark: #1A1A1A;
+            --text-muted: #666666;
+            --border-color: #E2E8F0;
+        }
+
+        /* --- CSS Reset & Base --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            background-color: var(--white);
+            line-height: 1.5;
+        }
+
+        h1, h2, h3, .logo-text, .section-label {
+            font-family: 'Montserrat', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding-left: 5%;
+            padding-right: 5%;
+        }
+
+        /* --- Section Styling --- */
+        section {
+            padding: 4rem 0;
+        }
+
+        .section-label {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 2.5rem;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+        }
+
+        .section-label::after {
+            content: '';
+            display: inline-block;
+            height: 2px;
+            background-color: var(--navy-primary);
+            flex-grow: 1;
+            margin-left: 20px;
+        }
+
+        /* --- GLOBAL HEADER --- */
+        header {
+            background-color: var(--navy-primary);
+            color: var(--white);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            padding: 1.2rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .header-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-text {
+            font-size: 1.8rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+        }
+
+        .logo-text span {
+            color: var(--red-accent);
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 2.2rem;
+        }
+
+        nav a {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            color: var(--text-on-navy);
+            transition: color 0.2s;
+        }
+
+        nav a:hover {
+            color: var(--red-accent);
+        }
+
+        .search-action-wrap {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .search-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--white);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            width: 240px;
+            font-size: 0.85rem;
+        }
+
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .icon-actions {
+            display: flex;
+            gap: 1rem;
+            color: var(--text-on-navy);
+        }
+
+        /* --- HERO BANNER (USING DIRECT DIRECT CDN LINK FOR PHOTO v0iuGE1ixOQ) --- */
+        .hero {
+            position: relative;
+            height: 520px;
+            background-color: var(--navy-primary);
+            background-image: linear-gradient(90deg, rgba(10, 17, 33, 0.92) 0%, rgba(10, 17, 33, 0.65) 45%, rgba(10, 17, 33, 0.1) 100%), 
+                        url('https://images.unsplash.com/photo-1518091043644-c1d4457512c6?q=80&w=1600&auto=format&fit=crop');
+            background-position: center center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            display: flex;
+            align-items: center;
+            color: var(--white);
+        }
+
+        .hero-content {
+            max-width: 600px;
+        }
+
+        .hero h1 {
+            font-size: 3.8rem;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--red-accent);
+            color: var(--white);
+            padding: 1rem 2.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        /* --- SHOP BY SPORT --- */
+        .sport-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1.5rem;
+        }
+
+        .sport-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--white);
+            transition: box-shadow 0.3s;
+        }
+
+        .sport-card:hover {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+        }
+
+        .sport-image {
+            height: 180px;
+            position: relative;
+            background-color: var(--bg-light);
+        }
+
+        .sport-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .sport-info {
+            padding: 1rem;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .sport-info h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: capitalize;
+        }
+
+        /* --- FEATURED COLLECTIONS --- */
+        .bg-light-col {
+            background-color: var(--bg-light);
+        }
+
+        .col-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .col-card {
+            background: var(--white);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            transition: transform 0.3s ease;
+        }
+
+        .col-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .col-image {
+            height: 260px;
+            background-color: #EEE;
+        }
+
+        .col-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .col-info {
+            padding: 1.2rem;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .col-info h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: capitalize;
+        }
+
+        /* --- SHOP BY CUSTOMER TYPE --- */
+        .customer-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1.2rem;
+        }
+
+        .customer-card {
+            background: var(--white);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        .customer-card:hover {
+            border-color: var(--navy-primary);
+        }
+
+        .customer-icon {
+            width: 100%;
+            height: 120px;
+        }
+
+        .customer-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .customer-card h4 {
+            padding: 0.8rem 0.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-transform: capitalize;
+        }
+
+        /* --- VALUE PROPOSITION --- */
+        .bg-navy-val {
+            background-color: var(--navy-primary);
+            color: var(--white);
+            margin-bottom: 2rem;
+            border-radius: 12px;
+        }
+
+        .bg-navy-val .section-label {
+            color: var(--white);
+        }
+
+        .bg-navy-val .section-label::after {
+            background-color: var(--text-on-navy);
+        }
+
+        .val-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            padding-bottom: 2rem;
+        }
+
+        .val-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .val-icon {
+            font-size: 2.5rem;
+            color: var(--red-accent);
+            margin-bottom: 0.5rem;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+        }
+
+        .val-card h3 {
+            font-size: 1rem;
+            color: var(--white);
+            text-transform: capitalize;
+        }
+
+        .val-card p {
+            font-size: 0.9rem;
+            color: #A0AEC0;
+        }
+
+        /* --- GLOBAL FOOTER --- */
+        footer {
+            background-color: var(--navy-primary);
+            color: var(--white);
+            padding-top: 4rem;
+            margin-top: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1.5fr;
+            gap: 3rem;
+            padding-bottom: 3rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .footer-col h4 {
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            color: var(--white);
+            text-transform: capitalize;
+        }
+
+        .footer-col ul {
+            list-style: none;
+        }
+
+        .footer-col ul li {
+            margin-bottom: 0.8rem;
+        }
+
+        .footer-col ul a {
+            color: #A0AEC0;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .footer-col ul a:hover {
+            color: var(--white);
+        }
+
+        .newsletter-form input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.02);
+            color: var(--white);
+            margin-bottom: 0.8rem;
+            border-radius: 4px;
+        }
+
+        .newsletter-form button {
+            width: 100%;
+            padding: 0.8rem;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding: 1.5rem 0;
+            color: #718096;
+            font-size: 0.8rem;
+        }
+
+        /* --- MOBILE & RESPONSIVE BREAKPOINTS --- */
+        @media (max-width: 992px) {
+            .header-wrap {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            nav {
+                order: 3;
+                width: 100%;
+                overflow-x: auto;
+            }
+
+            nav ul {
+                gap: 1.2rem;
+                min-width: max-content;
+            }
+
+            .search-action-wrap {
+                gap: 1rem;
+            }
+
+            .search-input {
+                width: 160px;
+            }
+
+            .sport-grid, .customer-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .col-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .val-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            section {
+                padding: 2.5rem 0;
+            }
+
+            .hero {
+                height: 420px;
+            }
+
+            .hero h1 {
+                font-size: 2.3rem;
+            }
+
+            .sport-grid, .customer-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+
+            .col-grid {
+                grid-template-columns: 1fr;
+                gap: 1.2rem;
+            }
+
+            .val-grid {
+                grid-template-columns: 1fr;
+                gap: 1.2rem;
+            }
+
+            .bg-navy-val, .bg-light-col {
+                padding: 2rem 1.5rem !important;
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .search-action-wrap {
+                width: 100%;
+                order: 2;
+                justify-content: space-between;
+            }
+
+            .search-input {
+                width: 60%;
+            }
+
+            .icon-actions {
+                font-size: 0.8rem;
+                gap: 0.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. GLOBAL HEADER -->
+    <header>
+        <div class="container header-wrap">
+            <a href="#" class="logo-text">VK7<span>SPORTS</span></a>
+            <nav>
+                <ul>
+                    <li><a href="#">Shop By Sport</a></li>
+                    <li><a href="#">Teamwear</a></li>
+                    <li><a href="#">Bulk Orders</a></li>
+                    <li><a href="#">About</a></li>
+                </ul>
+            </nav>
+            <div class="search-action-wrap">
+                <input type="text" class="search-input" placeholder="Search gear, equipment, teams...">
+                <div class="icon-actions">
+                    <span>Account</span>
+                    <span>Wishlist</span>
+                    <span>Cart(0)</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. HERO BANNER -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h1>Gear Up For The Season</h1>
+            <button class="btn-primary">Shop Now</button>
+        </div>
+    </section>
+
+    <!-- 3. SHOP BY SPORT -->
+    <section class="container">
+        <h2 class="section-label">Shop By Sport</h2>
+        <div class="sport-grid">
+            <div class="sport-card">
+                <div class="sport-image">
+                    <img src="https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&w=600&q=80" alt="Cricket">
+                </div>
+                <div class="sport-info"><h3>Cricket</h3></div>
+            </div>
+            <div class="sport-card">
+                <div class="sport-image">
+                    <img src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=600&q=80" alt="Football">
+                </div>
+                <div class="sport-info"><h3>Football</h3></div>
+            </div>
+            <div class="sport-card">
+                <div class="sport-image">
+                    <img src="https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=600&q=80" alt="Basketball">
+                </div>
+                <div class="sport-info"><h3>Basketball</h3></div>
+            </div>
+            <div class="sport-card">
+                <div class="sport-image">
+                    <img src="https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=600&q=80" alt="Volleyball">
+                </div>
+                <div class="sport-info"><h3>Volleyball</h3></div>
+            </div>
+            <div class="sport-card">
+                <div class="sport-image">
+                    <img src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=600&q=80" alt="Athletics">
+                </div>
+                <div class="sport-info"><h3>Athletics</h3></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. FEATURED COLLECTIONS -->
+    <section class="bg-light-col container" style="margin-top: 2rem; border-radius: 12px; padding: 4rem;">
+        <h2 class="section-label">Featured Collections</h2>
+        <div class="col-grid">
+            <div class="col-card">
+                <div class="col-image">
+                    <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80" alt="New Arrivals">
+                </div>
+                <div class="col-info"><h3>New Arrivals</h3></div>
+            </div>
+            <div class="col-card">
+                <div class="col-image">
+                    <img src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=600&q=80" alt="Best Sellers">
+                </div>
+                <div class="col-info"><h3>Best Sellers</h3></div>
+            </div>
+            <div class="col-card">
+                <div class="col-image">
+                    <img src="https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80" alt="Trending Products">
+                </div>
+                <div class="col-info"><h3>Trending Products</h3></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. SHOP BY CUSTOMER TYPE -->
+    <section class="container">
+        <h2 class="section-label">Shop By Customer Type</h2>
+        <div class="customer-grid">
+            <div class="customer-card">
+                <div class="customer-icon">
+                    <img src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=400&q=80" alt="Schools">
+                </div>
+                <h4>Schools</h4>
+            </div>
+            <div class="customer-card">
+                <div class="customer-icon">
+                    <img src="https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=400&q=80" alt="Colleges">
+                </div>
+                <h4>Colleges</h4>
+            </div>
+            <div class="customer-card">
+                <div class="customer-icon">
+                    <img src="https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=400&q=80" alt="Clubs">
+                </div>
+                <h4>Clubs</h4>
+            </div>
+            <div class="customer-card">
+                <div class="customer-icon">
+                    <img src="https://images.unsplash.com/photo-1526232761682-d26e03ac148e?auto=format&fit=crop&w=400&q=80" alt="Academies">
+                </div>
+                <h4>Academies</h4>
+            </div>
+            <div class="customer-card">
+                <div class="customer-icon">
+                    <img src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=80" alt="Corporate">
+                </div>
+                <h4>Corporate</h4>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. WHY VK7SPORTS -->
+    <section class="bg-navy-val container" style="padding: 4rem;">
+        <h2 class="section-label">Why VK7SPORTS</h2>
+        <div class="val-grid">
+            <div class="val-card">
+                <div class="val-icon">⚙</div>
+                <h3>Durable Gear</h3>
+                <p>Engineered for standard limits.</p>
+            </div>
+            <div class="val-card">
+                <div class="val-icon">✓</div>
+                <h3>Quality Check</h3>
+                <p>Material check for durability.</p>
+            </div>
+            <div class="val-card">
+                <div class="val-icon">★</div>
+                <h3>100% Comfort</h3>
+                <p>High-performance fit.</p>
+            </div>
+            <div class="val-card">
+                <div class="val-icon">📦</div>
+                <h3>Customization</h3>
+                <p>Custom designs for teams.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. GLOBAL FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <a href="#" class="logo-text" style="display:inline-block; margin-bottom:1rem;">VK7<span>SPORTS</span></a>
+                    <p style="color: #A0AEC0; font-size: 0.9rem;">High-performance gear built for standard limits.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Shop Sport</a></li>
+                        <li><a href="#">Teamwear</a></li>
+                        <li><a href="#">Bulk Orders</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Policies</h4>
+                    <ul>
+                        <li><a href="#">Return Policy</a></li>
+                        <li><a href="#">Warranty Info</a></li>
+                        <li><a href="#">Size Guide</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Newsletter Signup</h4>
+                    <form class="newsletter-form">
+                        <input type="email" placeholder="Enter your email...">
+                        <button type="submit" class="btn-primary">Subscribe</button>
+                    </form>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                &copy; 2026 VK7SPORTS. Prototype UI Framework.
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>
