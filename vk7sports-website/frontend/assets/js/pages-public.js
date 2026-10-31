@@ -441,7 +441,14 @@
         ${checkbox('agree', html`I agree to the <a class="link" href="policy.html?doc=terms" target="_blank">terms of sale</a> and <a class="link" href="policy.html?doc=privacy" target="_blank">privacy policy</a>.`)}
         <button class="btn btn-red" type="submit">Submit application</button>
       </form><p class="mt-l mb-0">Already have an account? <a class="link" href="login.html">Sign in</a></p></div></div>`;
-    onSubmit(main.querySelector('form'), async v => { await api.auth.register(v); location.href = 'account.html?welcome=1'; });
+    onSubmit(main.querySelector('form'), async v => {
+      const r = await api.auth.register(v);
+      if (r && r.pending) {
+        main.innerHTML = html`<div class="auth"><div class="auth-card center"><h1 style="font-size:24px">Application received</h1><p class="muted">Thank you. We will review your shop and email you once it is approved. You can sign in after that.</p><a class="btn btn-navy" href="catalogue.html">Browse catalogue</a></div></div>`;
+        return;
+      }
+      location.href = 'account.html?welcome=1';
+    });
   });
 
   page('forgot', { layout: 'public' }, async main => {

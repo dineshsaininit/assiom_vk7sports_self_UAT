@@ -103,8 +103,13 @@ class CheckoutController extends Controller
     /**
      * Place the order once, re-checking the rules against the saved cart.
      */
-    public function order(OnepageController $onepageController): JsonResponse
+    public function order(Request $request, OnepageController $onepageController): JsonResponse
     {
+        $data = $request->validate([
+            'po_ref' => ['nullable', 'string', 'max:100'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
         if ($blocked = $this->blocked()) {
             return $blocked;
         }
@@ -127,6 +132,10 @@ class CheckoutController extends Controller
             $order = $this->orderRepository->create((new OrderResource(Cart::getCart()))->jsonSerialize());
 
             Cart::deActivateCart();
+
+            foreach (array_filter(['Retailer reference: '.($data['po_ref'] ?? ''), 'Delivery notes: '.($data['notes'] ?? '')], fn ($comment) => ! str_ends_with($comment, ': ')) as $comment) {
+                $order->comments()->create(['comment' => $comment, 'customer_notified' => 0]);
+            }
         } catch (\Exception $e) {
             return $this->fail($e->getMessage(), 'ORDER_REJECTED');
         } finally {

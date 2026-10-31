@@ -2,10 +2,11 @@
    Pages show a visible "To be confirmed" tag until the real value is entered here. */
 window.VK7_CONFIG = {
   // Set to false, once the backend is connected, to remove the yellow demo strip and demo sign-in shortcuts.
-  demoMode: true,
-  // 'mock' = browser demo backend in api.js. See INTEGRATION.md for connecting Bagisto.
-  apiMode: 'mock',
-  apiBase: '',
+  demoMode: false,
+  // 'live' = real backend through api-live.js. 'mock' = browser demo in api.js (also set demoMode to true).
+  apiMode: 'live',
+  apiBase: 'http://127.0.0.1:8000/api/v1',
+  adminUrl: 'http://127.0.0.1:8000/admin',
 
   brand: { name: 'VK7SPORTS', tagline: 'Sportswear for champions' },
 

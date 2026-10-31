@@ -3,6 +3,7 @@
 namespace VK7\Wholesale\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ApplyPolicy extends Command
@@ -57,6 +58,8 @@ class ApplyPolicy extends Command
                 'updated_at' => now(),
             ]);
         }
+
+        Cache::flush();
 
         $this->components->info('VK7 planning defaults applied. They are not owner-confirmed.');
 

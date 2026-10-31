@@ -1,12 +1,16 @@
 # VK7SPORTS frontend
 
-The complete website: public pages, retailer account and staff back office (50 pages). It runs on sample data until the backend is connected.
+The complete website: public pages, retailer account and staff back office (50 pages). Retailer pages run on the real backend by default; see `INTEGRATION.md`. Staff pages redirect to the Bagisto admin panel in live mode.
 
 ## Run it
 
-Double-click `index.html`. Nothing needs installing.
+Start the backend first (`docs/backend/VK7SPORTS_BACKEND_SETUP.md`), then serve this folder and open http://127.0.0.1:8080:
 
-To serve it instead: `python -m http.server 8080` from this folder, then open http://127.0.0.1:8080
+```bash
+php -S 127.0.0.1:8080 -t .
+```
+
+For the sample-data demo with no backend, set `apiMode: 'mock'` and `demoMode: true` in `assets/js/config.js`. The sign-ins and walkthrough below apply only to that demo.
 
 ## Demo sign-ins
 

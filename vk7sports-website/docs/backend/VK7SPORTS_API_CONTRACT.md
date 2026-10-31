@@ -1,6 +1,6 @@
 # VK7SPORTS API Contract v1
 
-For the frontend (Dinesh). Base URL in development: `http://127.0.0.1:8000/api/v1`. Setup is in [VK7SPORTS_BACKEND_SETUP.md](VK7SPORTS_BACKEND_SETUP.md).
+For the frontend (Dinesh). The site already calls this through `frontend/assets/js/api-live.js`. Base URL in development: `http://127.0.0.1:8000/api/v1`. Setup is in [VK7SPORTS_BACKEND_SETUP.md](VK7SPORTS_BACKEND_SETUP.md).
 
 All data in development is fictional. Business rules are planning defaults, not owner-confirmed (see [VK7SPORTS_BACKEND_REQUIREMENTS.md](VK7SPORTS_BACKEND_REQUIREMENTS.md)). Read rules such as the minimum from `GET /meta` and show the server's messages. Do not hard-code them, because they will change.
 
@@ -41,6 +41,10 @@ Validation errors return 422 with `{ "message": "...", "errors": { "field": ["..
 | Checkout | `POST /checkout/address`, `/shipping`, `/payment`, `/order` |
 | Orders and tracking | `GET /orders`, `GET /orders/{id}` |
 | Enquiry / contact / custom order | `POST /enquiries` |
+| Forgot password | `POST /auth/forgot` |
+| Profile, password, addresses | `GET` and `PUT /account`, `PUT /account/password`, `/account/addresses` |
+| Public order tracking | `POST /orders/track` |
+| My enquiries | `GET /enquiries/mine` |
 | Admin screens | **Not in this API.** Staff use the Bagisto panel at `/admin` |
 
 About, policy and other static pages need no backend. Their wording awaits the owner.
@@ -66,7 +70,7 @@ Returns `data: [{ id, name, slug, children: [...] }]`.
 
 ### `GET /products`
 
-Query parameters, all optional: `q` (search), `category_id`, `color` and `size` (option ids), `sort`, `limit` (1-100, default 12), `page`.
+Query parameters, all optional: `q` (search), `category_id`, `color` and `size` (option ids), `sort`, `limit` (1-100, default 12), `page`, `include_grid=1` (adds each product's `grid`).
 
 ```json
 { "data": [{
@@ -105,7 +109,7 @@ For visitors, `stock` and `prices` are `null`, and only `in_stock` is sent.
 
 ### `POST /auth/register`
 
-Required: `business_name`, `first_name`, `last_name`, `email`, `phone`, `password`, `password_confirmation`. Returns 201 with `{ "data": { "email": "...", "approval": "pending" } }`. Show "waiting for approval". The retailer cannot sign in until staff activate the account in `/admin`.
+Required: `business_name`, `first_name`, `last_name`, `email`, `phone`, `password`, `password_confirmation`. Optional: `shop_type`, `gstin`, `proof`, and an address (`label`, `line1`, `city`, `state`, `pin`). Returns 201 with `{ "data": { "email": "...", "approval": "pending" } }`. Show "waiting for approval". The retailer cannot sign in until staff activate the account in `/admin`.
 
 ### `POST /auth/login`
 
@@ -144,10 +148,18 @@ Run this when the grid changes. It saves nothing.
 } }
 ```
 
+### Account
+
+- `GET /account` returns the profile and `addresses`. `PUT /account` updates `{ first_name, last_name, phone }`.
+- `PUT /account/password` takes `{ current_password, password, password_confirmation }` and signs out other devices.
+- `POST /account/addresses` and `PUT /account/addresses/{id}` take `{ label, line1, city, state, pin, phone }`. `state` is an Indian state name or code. `DELETE /account/addresses/{id}` keeps at least one (`LAST_ADDRESS`). `POST /account/addresses/{id}/default` sets the default.
+- `POST /auth/forgot` (public) takes `{ email }` and answers the same for any address.
+
 ### Cart
 
 - `GET /cart` returns the cart, or `data: null` when it is empty.
 - `POST /cart/items` takes the same `lines` body and **adds** to what is there, all lines or none. Errors: `INVALID_LINE`, `CART_REJECTED`.
+- `PUT /cart/styles/{productId}` replaces all of a style's lines with `{ lines: [{ variant_id, qty }] }`, all or none. An empty list removes the style. `QUOTE_LOCKED` for a locked style.
 - `PUT /cart/items/{id}` sets `{ qty }`. A line from an accepted quote returns `QUOTE_LOCKED`.
 - `DELETE /cart/items/{id}` removes a line.
 
@@ -208,6 +220,12 @@ Each step can return the cart errors `MOQ_NOT_MET`, `QUOTE_LOCKED` or `INSUFFICI
 **Payment is offline only.** Cash on delivery and money transfer are the only methods accepted, and no money is collected. Online gateways return `INVALID_PAYMENT`. Do not build a payment screen, or show 10% advance / 90% COD as real terms, until the owner confirms them and Om authorises it.
 
 ### Orders
+
+`POST /orders/{id}/cancel` with `{ reason }` works while the order is `pending`; otherwise it returns `CANNOT_CANCEL`.
+
+`POST /orders/track` is public. Send `{ number, phone }` where the mobile is the one on the order. It returns basic progress with no prices, or 404 if either does not match.
+
+`POST /checkout/order` also accepts optional `po_ref` and `notes`.
 
 `GET /orders` (`?limit=&page=`) and `GET /orders/{id}`:
 

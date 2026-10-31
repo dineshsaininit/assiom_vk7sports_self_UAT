@@ -1,86 +1,57 @@
 # Connecting the backend
 
-Every screen gets its data through `VK7.api` in `assets/js/api.js`. No page reads data any other way. To connect the backend, replace the method bodies with `fetch()` calls and keep the same return shapes. The screens should not need changes.
+The retailer pages are connected. `assets/js/api-live.js` replaces the demo methods in `api.js` with calls to `/api/v1` and returns the same shapes, so the screens did not need rewriting. The API itself is described in `docs/backend/VK7SPORTS_API_CONTRACT.md`.
 
-## The contract
+## Switching mode
+
+In `assets/js/config.js`:
+
+| Setting | Live (default) | Demo |
+|---|---|---|
+| `apiMode` | `'live'` | `'mock'` |
+| `demoMode` | `false` | `true` |
+| `apiBase`, `adminUrl` | Backend address | Not used |
+
+Run the backend and serve this folder (see `README.md`). Change `apiBase` and `adminUrl` when the backend moves. Demo mode is unchanged, for walkthroughs without a backend.
+
+## The contract the pages rely on
 
 - Every method returns a Promise.
-- On failure, throw `new VK7.ApiError(message, { code, status, fields })`.
-  - `fields` is `{ fieldName: 'message' }`. Forms show each message beside its field.
-  - `status: 401` sends the user to sign-in. `status: 404` shows a "not found" screen.
-- Every `fetch` must send the session cookie and CSRF token (`credentials: 'include'`).
+- Failures throw `new VK7.ApiError(message, { code, status, fields })`. `fields` is `{ fieldName: 'message' }`, shown beside each field. `status: 401` sends the user to sign-in; `status: 404` shows "not found".
+- Sign-in uses a bearer token kept in the browser, not a session cookie. No CSRF token is needed.
+- The browser never decides a price, stock or minimum. The server enforces them.
 
-## Rules the server must enforce
+## What is live and what is not
 
-`api.js` imitates these so the demo behaves correctly, but browser code can be edited by anyone. Each one must be enforced on the server:
+| `VK7.api` area | State in live mode |
+|---|---|
+| `auth` (register, login, logout, me, forgot) | Live. Registration creates a pending shop; it can sign in after staff approve it |
+| `catalog` | Live. Colour, size, stock and sort filters run in the browser on the fetched list |
+| `cart`, `quotes` | Live. Lines from an accepted quote are locked |
+| `checkout` | Live, offline only. No money is collected. The cheapest delivery method is chosen, because courier charges are not confirmed |
+| `orders` list, get, cancel, reorder, track | Live |
+| `enquiries` | Live |
+| `account` get, update, password, addresses | Live |
+| `orders.submitPayment`, `orders.artwork`, `account.addUser`, `removeUser` | **Not available.** They show "not available online yet" |
+| `account.statement` | Empty. There is no ledger yet |
+| `notifications` | Empty. There are no retailer notifications yet |
+| `api.admin.*` (all staff screens) | **Not connected.** `admin*.html` pages redirect to the Bagisto admin panel at `adminUrl` |
 
-1. **Price hiding (D-06, test T-2).** Visitors and unapproved retailers must never receive a price in any response. Bagisto's shop feeds such as `GET /api/products` send prices to anyone today, and hiding them on screen would still leak them.
-2. **Retailer isolation.** A retailer can only read or change their own orders, quotes and statement.
-3. **Minimum order, stock and price.** Recalculate these on the server. Never trust amounts, prices or totals sent by the browser.
-4. **Roles.** Staff permissions must match `PERMS` in `api.js`.
-5. **One submission only.** Quote and order creation must be safe against double clicks and retries.
+## Differences from the demo to know about
 
-## Method map
+- **Payment:** checkout and order pages say VK7SPORTS will confirm payment terms. Advance amounts, hold times and the pay form appear only in demo mode, because those rules are not approved.
+- **Marketing pages** (home, how it works, FAQ, customised orders) still mention the planning-default advance percentage from `api.settings` in `api-live.js`. Change the wording or those values once the owner confirms the terms.
+- **Order status:** live orders show Order placed, Packing, Dispatched, Delivered or Cancelled, mapped from Bagisto. The planned status list (R-26) is not built.
+- **Images:** products without photos show the VK7 mark. Colour swatches are grey until swatch colours are set on the attribute options in admin.
+- **Shop type and business proof** from the application form are saved as an entry in the admin Enquiries queue, because Bagisto has no fields for them. GSTIN is also saved on the address.
+- **Address label** is stored in the address company-name field.
 
-Routes marked **Verified** were read from `backend/app/packages/Webkul/Shop/src/Routes/`. Routes marked **Doc** come from the handover docs, because B2B Suite is a Composer package that is not in this repo. Check them against your running install. **New** means nothing exists yet and an endpoint must be built.
+## Staff screens still to decide
 
-| `VK7.api` method | Screen | Backend | Status |
-|---|---|---|---|
-| `auth.login` | Sign-in | `POST /api/customer/login` | Verified |
-| `auth.me` | Every page | Current customer plus cart count | New |
-| `auth.logout`, `auth.forgot` | Account, reset password | Bagisto customer routes | Check |
-| `auth.register` | Trade application | B2B Suite company sign-up | Doc |
-| `auth.staffLogin` | Staff sign-in | Bagisto admin login, with 2FA | See note 1 |
-| `catalog.categories` | Home, filters | `GET /api/categories` | Verified |
-| `catalog.list`, `catalog.get` | Catalogue, product | `GET /api/products` | Verified, prices must be hidden |
-| `catalog.facets` | Filters | `GET /api/categories/attributes` | Verified |
-| `catalog.skus` | Quick order | B2B quick order | Doc |
-| `cart.get` | Order list | `GET /api/checkout/cart` | Verified |
-| `cart.setStyle`, `cart.addMany` | Size and colour grid | `POST /api/checkout/cart` | **New**: must add many variants at once with MOQ intact (test T-3) |
-| `cart.setLine`, `cart.removeStyle`, `cart.clear` | Order list | `PUT` and `DELETE /api/checkout/cart` | Verified |
-| `checkout.prepare` | Checkout | `GET /api/checkout/onepage/summary` | Verified |
-| `checkout.place` | Checkout | `POST /api/checkout/onepage/addresses`, `.../shipping-methods`, `.../payment-methods`, `.../orders` | Verified |
-| `quotes.request` | Order list | `POST /customer/account/quotes` | Doc |
-| `quotes.list`, `get`, `accept`, `decline`, `message` | Quotes | B2B quote routes | Doc |
-| `orders.list`, `orders.get` | My orders | Customer order routes | Check |
-| `orders.reorder`, `orders.cancel` | Order page | Bagisto order routes | Check |
-| `orders.submitPayment` | Order page | Payment reference | **New** |
-| `orders.artwork` | Customised orders | Artwork approval | **New**: fix F7 first |
-| `orders.track` | Track an order | Public lookup by number and mobile | **New** |
-| `enquiries.create`, `mine`, `contact` | Enquiry forms | Enquiry queue | **New** |
-| `account.get`, `update`, `password` | Shop profile | Customer profile routes | Check |
-| `account.saveAddress`, `deleteAddress`, `defaultAddress` | Addresses | `/api/customer/addresses` | Verified |
-| `account.addUser`, `removeUser` | Shop logins | B2B company users | Doc |
-| `account.statement`, `account.overview` | Statement, overview | Retailer ledger | **New** |
-| `notifications.*` | Notifications | Notification list | **New** |
-| `settings` | Public terms | Public subset of settings | **New**; `vk7.moq.settings.*` exists |
-
-### Staff screens: `api.admin.*`
-
-| Methods | Screens | Status |
-|---|---|---|
-| `retailers`, `retailer`, `decideRetailer` | Retailers | Approval exists in B2B Suite; JSON endpoints needed |
-| `quotes`, `quote`, `sendOffer` | Quotes | Quote logic exists; JSON endpoints needed |
-| `orders`, `order`, `setOrderStatus`, `holdOrder`, `resumeOrder`, `cancelOrder` | Orders | Orders exist; VK7 statuses (R-26) are **new** |
-| `authoriseProduction`, `sendArtwork` | Customised orders | **New** |
-| `payments`, `verifyPayment`, `recordBalance` | Payments | **New** (Payments and Ledger module) |
-| `dispatch`, `shipOrder` | Dispatch | Shipments exist; courier and LR record is **new** |
-| `products`, `product`, `saveProduct` | Products | Products exist; JSON endpoints needed |
-| `inventory`, `adjustStock`, `stockLog` | Inventory | Stock exists; correction log with reasons is **new** |
-| `enquiries`, `updateEnquiry` | Enquiries | **New** |
-| `staff`, `saveStaff`, `toggleStaff` | Staff and roles | Admin users exist; JSON endpoints needed |
-| `allSettings`, `saveSettings` | Settings | Only MOQ settings exist; the others are **new** |
-| `audit` | Activity log | **New** |
-| `dashboard`, `counts`, `reports` | Dashboard, reports | **New** |
-
-**Note 1, staff screens.** The project documents treat Bagisto's admin as the staff back office, with VK7 work queues added. So you have a choice for each staff screen: build the JSON endpoints above, or keep the Bagisto admin screen and link to it. The owner dashboard, payments, dispatch and activity log have no Bagisto equivalent either way.
-
-## Moving to a Bagisto theme
-
-FE-1, a VK7 theme inside Bagisto, is the project's preferred architecture, and that decision is not final. The CSS file carries over unchanged. The page code is plain HTML templates, so it can be moved into Blade one page at a time.
+The project documents treat Bagisto's admin as the staff back office. The `admin*.html` pages remain as a design reference. For each one, either build JSON endpoints or keep the Bagisto screen. The owner dashboard, payments, dispatch record and activity log have no Bagisto equivalent either way, so those need new backend work.
 
 ## Replace before going live
 
-- Sample products, prices and stock in `seed.js`. Style names and codes are placeholders.
-- Passwords in `api.js` and `seed.js` are demo values and are kept as plain text. Nothing like this may reach the server.
+- `apiBase` and `adminUrl` in `config.js`, and restrict CORS on the backend to the site's address.
 - Bank and company details in `config.js`.
+- Fictional products. `seed.js` and the passwords in `api.js` are demo-only and are not used in live mode; do not serve them in production if demo mode is removed.

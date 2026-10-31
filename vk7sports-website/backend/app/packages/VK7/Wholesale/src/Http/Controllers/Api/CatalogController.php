@@ -57,6 +57,7 @@ class CatalogController extends Controller
             'sort' => ['nullable', 'string', 'max:50'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
+            'include_grid' => ['nullable', 'boolean'],
         ]);
 
         $params = array_filter([
@@ -74,7 +75,9 @@ class CatalogController extends Controller
         $products = $this->productRepository->getAll($params);
 
         return response()->json([
-            'data' => collect($products->items())->map(fn ($product) => $this->card($product))->values(),
+            'data' => collect($products->items())->map(fn ($product) => $request->boolean('include_grid')
+                ? array_merge($this->card($product), ['grid' => $this->grid($product)])
+                : $this->card($product))->values(),
             'meta' => [
                 'current_page' => $products->currentPage(),
                 'last_page' => $products->lastPage(),
@@ -144,6 +147,7 @@ class CatalogController extends Controller
             'url_key' => $product->url_key,
             'type' => $product->type,
             'short_description' => $product->short_description,
+            'categories' => $product->categories->map(fn ($category) => $category->slug)->values(),
             'base_image' => $product->images->first()?->url,
             'in_stock' => $product->getTypeInstance()->isSaleable(),
             'prices' => $this->prices($product),
@@ -167,7 +171,7 @@ class CatalogController extends Controller
                 'label' => $attribute->admin_name,
                 'options' => $attribute->options
                     ->whereIn('id', $product->variants->pluck($attribute->code)->unique())
-                    ->map(fn ($option) => ['id' => $option->id, 'label' => $option->admin_name])
+                    ->map(fn ($option) => ['id' => $option->id, 'label' => $option->admin_name, 'swatch' => $option->swatch_value])
                     ->values(),
             ])->values(),
             'variants' => $product->variants->map(fn ($variant) => [

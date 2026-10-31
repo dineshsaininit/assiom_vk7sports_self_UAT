@@ -37,7 +37,7 @@
         </div>
         <aside class="card card-pad sticky"><h3 class="mb">Summary</h3>
           <div class="sum"><div><span>Pieces</span><span>${c.pieces}</span></div><div><span>Subtotal, before GST</span><span>${money(c.subtotal)}</span></div>
-            <div><span>Advance due (${c.advancePct}%)</span><span>${money(c.advanceDue)}</span></div><div><span>Balance on delivery</span><span>${money(c.balanceDue)}</span></div>
+            ${c.advancePct != null ? html`<div><span>Advance due (${c.advancePct}%)</span><span>${money(c.advanceDue)}</span></div><div><span>Balance on delivery</span><span>${money(c.balanceDue)}</span></div>` : ''}
             <div class="tot"><span>Order value</span><span>${money(c.subtotal)}</span></div></div>
           <p class="small muted mt">GST and delivery charges to be confirmed.</p>
           <div class="stack" style="gap:8px">
@@ -104,13 +104,13 @@
           <div class="field" data-field="addressId"><div class="stack" style="gap:8px">${c.addresses.map(a => html`<label class="card card-pad check" style="align-items:flex-start;padding:12px"><input type="radio" name="addressId" value="${a.id}" ${a.id === def.id ? raw('checked') : ''}><span><strong>${a.label}</strong><br><span class="muted small">${a.line1}, ${a.city}, ${a.state} ${a.pin} · ${a.phone}</span></span></label>`)}</div><span class="err" hidden></span></div></div>
         <div class="card card-pad"><h3 class="mb">Order details</h3><div class="form">${field('poRef', 'Your reference (optional)', { hint: 'For example your purchase order number.' })}${field('notes', 'Delivery notes (optional)', { type: 'textarea', rows: 3 })}</div></div>
         <div class="card card-pad"><h3 class="mb">How you pay</h3>
-          <p>You pay a <strong>${c.advancePct}% advance of ${money(c.advanceDue)}</strong> by UPI or bank transfer, then enter the payment reference on your order page. Stock is held for ${c.holdHours} hours.</p>
-          <p class="mb-0 muted">No payment is taken on this website. The balance of ${money(c.balanceDue)} is due on delivery, as agreed with VK7SPORTS.</p></div>
+          ${c.advancePct != null ? html`<p>You pay a <strong>${c.advancePct}% advance of ${money(c.advanceDue)}</strong> by UPI or bank transfer, then enter the payment reference on your order page. Stock is held for ${c.holdHours} hours.</p>
+          <p class="mb-0 muted">No payment is taken on this website. The balance of ${money(c.balanceDue)} is due on delivery, as agreed with VK7SPORTS.</p>` : html`<p class="mb-0">No payment is taken on this website. VK7SPORTS will contact you to confirm payment terms for this order.</p>`}</div>
         <div class="card"><div class="card-head"><h3>Items (${c.pieces} pieces)</h3></div>${lineTable(c.lines)}</div>
       </div>
       <aside class="card card-pad sticky"><h3 class="mb">Summary</h3>
-        <div class="sum"><div><span>Pieces</span><span>${c.pieces}</span></div><div><span>Order value, before GST</span><span>${money(c.subtotal)}</span></div><div><span>Balance on delivery</span><span>${money(c.balanceDue)}</span></div>
-          <div class="tot"><span>Advance due now</span><span>${money(c.advanceDue)}</span></div></div>
+        <div class="sum"><div><span>Pieces</span><span>${c.pieces}</span></div><div><span>Order value, before GST</span><span>${money(c.subtotal)}</span></div>${c.advancePct != null ? html`<div><span>Balance on delivery</span><span>${money(c.balanceDue)}</span></div>
+          <div class="tot"><span>Advance due now</span><span>${money(c.advanceDue)}</span></div>` : html`<div class="tot"><span>Order value</span><span>${money(c.subtotal)}</span></div>`}</div>
         <div class="mt">${checkbox('agree', html`I accept the <a class="link" href="policy.html?doc=terms" target="_blank">terms of sale</a>.`)}</div>
         <button class="btn btn-red btn-block mt" type="submit" ${c.shortages.length ? raw('disabled') : ''}>Place order</button>
         <a class="btn btn-ghost btn-block mt" href="${quoteId ? 'account-quote.html?id=' + quoteId : 'cart.html'}">Go back</a>
@@ -127,9 +127,9 @@
       <div class="state-ico" style="background:var(--ok-bg);color:var(--ok)">${icon('check', 24)}</div>
       <h1>Order received</h1><p class="muted">Thank you. Your order number is</p>
       <p class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">${o.number}</p>
-      <div class="sum" style="text-align:left;margin:16px 0"><div><span>Advance due</span><strong>${money(o.advanceDue)}</strong></div><div><span>Pay by</span><strong>${dateTime(o.holdUntil)}</strong></div></div>
-      <ol style="text-align:left;color:var(--ink-2)"><li>Pay the advance by UPI or bank transfer.</li><li>Enter the payment reference on your order page.</li><li>We verify it and confirm your order.</li></ol>
-      <div class="row" style="justify-content:center"><a class="btn btn-red" href="account-order.html?id=${o.id}">Pay and view order</a><a class="btn btn-line" href="catalogue.html">Keep shopping</a></div>
+      ${o.advancePct != null ? html`<div class="sum" style="text-align:left;margin:16px 0"><div><span>Advance due</span><strong>${money(o.advanceDue)}</strong></div><div><span>Pay by</span><strong>${dateTime(o.holdUntil)}</strong></div></div>
+      <ol style="text-align:left;color:var(--ink-2)"><li>Pay the advance by UPI or bank transfer.</li><li>Enter the payment reference on your order page.</li><li>We verify it and confirm your order.</li></ol>` : html`<p>VK7SPORTS will contact you to confirm payment terms and delivery.</p>`}
+      <div class="row" style="justify-content:center"><a class="btn btn-red" href="account-order.html?id=${o.id}">${o.advancePct != null ? 'Pay and view order' : 'View order'}</a><a class="btn btn-line" href="catalogue.html">Keep shopping</a></div>
     </div></div>`;
   });
 
@@ -165,7 +165,7 @@
   });
 
   /* ---------- Orders ---------- */
-  const TABS = [['All', () => true], ['Action needed', o => ['Awaiting advance', 'Awaiting balance', 'Artwork awaiting approval'].includes(o.status)], ['In progress', o => ['Confirmed', 'Packing', 'Dispatched', 'Production authorised', 'In production'].includes(o.status)], ['Completed', o => ['Delivered', 'Paid in full'].includes(o.status)], ['Cancelled', o => ['Cancelled', 'Expired'].includes(o.status)]];
+  const TABS = [['All', () => true], ['Action needed', o => ['Awaiting advance', 'Awaiting balance', 'Artwork awaiting approval'].includes(o.status)], ['In progress', o => ['Order placed', 'Confirmed', 'Packing', 'Dispatched', 'Production authorised', 'In production'].includes(o.status)], ['Completed', o => ['Delivered', 'Paid in full'].includes(o.status)], ['Cancelled', o => ['Cancelled', 'Expired'].includes(o.status)]];
   page('account-orders', { layout: 'account', access: 'retailer' }, async main => {
     const orders = await api.orders.list();
     let tab = 0;
@@ -220,7 +220,7 @@
         ${o.shipment ? html`<div class="card card-pad"><h3 class="mb">Delivery</h3><dl class="kv"><dt>Courier or transporter</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd><dt>Dispatched on</dt><dd>${date(o.shipment.date)}</dd></dl></div>` : ''}
         <div class="card"><div class="card-head"><h3>Items (${pcs(o.lines)} pieces)</h3></div>${lineTable(o.lines)}</div>
         <div class="two">
-          <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div><div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance outstanding</span><span>${money(o.outstanding)}</span></div></div>
+          <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div>${o.advancePct != null ? html`<div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance outstanding</span><span>${money(o.outstanding)}</span></div>` : html`<div class="tot"><span>Payment</span><span>To be confirmed</span></div>`}</div>
             ${o.payments.length ? html`<div class="mt small">${o.payments.map(p => html`<div class="row between" style="padding:4px 0"><span class="mono">${p.ref}</span><span>${money(p.amount)}</span>${badge(p.status)}</div>`)}</div>` : ''}</div>
           <div class="card card-pad"><h3 class="mb">Delivery address</h3><p class="mb-0">${o.address.label}<br><span class="muted">${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}<br>${o.address.phone}</span></p>${o.poRef ? html`<p class="mt mb-0 small">Your reference: ${o.poRef}</p>` : ''}</div>
         </div>
@@ -248,7 +248,7 @@
         <div class="right"><h2 style="font-size:20px">Proforma</h2><div class="mono">${o.number}</div><div class="small muted">${date(o.createdAt)}</div></div></div>
       <div class="two mb"><div><div class="small muted">Bill to</div><strong>${o.company}</strong><br>${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}</div><div><div class="small muted">Status</div>${o.status}${o.poRef ? html`<div class="small muted mt">Your reference</div>${o.poRef}` : ''}</div></div>
       ${lineTable(o.lines)}
-      <div class="sum mt" style="max-width:320px;margin-left:auto"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div><div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance</span><span>${money(o.outstanding)}</span></div></div>
+      <div class="sum mt" style="max-width:320px;margin-left:auto"><div><span>Order value, before GST</span><span>${money(o.subtotal)}</span></div>${o.advancePct != null ? html`<div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Paid and verified</span><span>${money(o.paid)}</span></div><div class="tot"><span>Balance</span><span>${money(o.outstanding)}</span></div>` : ''}</div>
       <p class="small muted mt-l mb-0">GST and tax invoice format to be confirmed by the chartered accountant.</p></div></div>`;
   });
 

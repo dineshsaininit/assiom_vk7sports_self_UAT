@@ -54,6 +54,8 @@ class OrderController extends Controller
             'payment_method' => $order->payment?->method,
             'items' => $order->items->whereNull('parent_id')->map(fn ($item) => [
                 'id' => $item->id,
+                'product_id' => $item->product_id,
+                'variant_id' => $item->child?->product_id,
                 'name' => $item->name,
                 'sku' => $item->child?->sku ?? $item->sku,
                 'options' => $item->additional['attributes'] ?? [],
@@ -62,14 +64,79 @@ class OrderController extends Controller
                 'price' => (float) $item->base_price,
                 'total' => (float) $item->base_total,
             ])->values(),
-            'shipments' => $order->shipments->map(fn ($shipment) => [
-                'id' => $shipment->id,
-                'carrier' => $shipment->carrier_title,
-                'track_number' => $shipment->track_number,
-                'total_qty' => (int) $shipment->total_qty,
-                'created_at' => $shipment->created_at,
+            'shipments' => $this->shipments($order),
+            'comments' => $order->comments->map(fn ($comment) => [
+                'comment' => $comment->comment,
+                'created_at' => $comment->created_at,
             ])->values(),
+            'address' => ($address = $order->shipping_address ?? $order->billing_address) ? [
+                'label' => $address->company_name,
+                'line1' => $address->address,
+                'city' => $address->city,
+                'state' => $address->state,
+                'pin' => $address->postcode,
+                'phone' => $address->phone,
+            ] : null,
         ])]);
+    }
+
+    /**
+     * Cancel an order that has not started moving.
+     */
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+
+        $order = $this->orderRepository->find($id);
+
+        if (
+            ! $order
+            || ! in_array($order->customer_id, $this->buyerIds())
+        ) {
+            return $this->fail(trans('Order not found.'), 'NOT_FOUND', 404);
+        }
+
+        if (
+            $order->status !== 'pending'
+            || ! $this->orderRepository->cancel($order)
+        ) {
+            return $this->fail(trans('This order can no longer be cancelled online. Please contact sales.'), 'CANNOT_CANCEL');
+        }
+
+        $order->comments()->create(['comment' => 'Cancelled by retailer: '.$data['reason'], 'customer_notified' => 0]);
+
+        return $this->show($id);
+    }
+
+    /**
+     * Show basic progress to anyone holding both the order number and the mobile on it.
+     */
+    public function track(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'number' => ['required', 'string', 'max:50'],
+            'phone' => ['required', 'string', 'max:20'],
+        ]);
+
+        $order = $this->orderRepository->findOneByField('increment_id', trim($data['number']));
+
+        $phone = substr(preg_replace('/\D/', '', $data['phone']), -10);
+
+        if (
+            ! $order
+            || ! $order->addresses->contains(fn ($address) => substr(preg_replace('/\D/', '', (string) $address->phone), -10) === $phone)
+        ) {
+            return $this->fail(trans('No order matches that number and mobile.'), 'NOT_FOUND', 404);
+        }
+
+        return response()->json(['data' => [
+            'order_number' => $order->increment_id,
+            'status' => $order->status,
+            'status_label' => $order->status_label,
+            'total_qty' => (int) $order->total_qty_ordered,
+            'created_at' => $order->created_at,
+            'shipments' => $this->shipments($order),
+        ]]);
     }
 
     /**
@@ -84,6 +151,20 @@ class OrderController extends Controller
         return $customer->type === 'company'
             ? array_values(array_unique(array_merge($ids, $customer->members()->pluck('customers.id')->all())))
             : $ids;
+    }
+
+    /**
+     * Shape an order's shipments.
+     */
+    protected function shipments($order)
+    {
+        return $order->shipments->map(fn ($shipment) => [
+            'id' => $shipment->id,
+            'carrier' => $shipment->carrier_title,
+            'track_number' => $shipment->track_number,
+            'total_qty' => (int) $shipment->total_qty,
+            'created_at' => $shipment->created_at,
+        ])->values();
     }
 
     /**

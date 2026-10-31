@@ -75,16 +75,7 @@ class CartController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($lines) {
-                foreach ($lines as $line) {
-                    Cart::addProduct($line['product'], array_filter([
-                        'product_id' => $line['product']->id,
-                        'quantity' => $line['qty'],
-                        'selected_configurable_option' => $line['variant']?->id,
-                        'super_attribute' => $line['variant'] ? $this->superAttributes($line['product'], $line['variant']) : null,
-                    ]));
-                }
-            });
+            DB::transaction(fn () => $this->addLines($lines));
         } catch (\Throwable $e) {
             Cart::initCart($this->customer());
 
@@ -92,6 +83,50 @@ class CartController extends Controller
         }
 
         return response()->json(['data' => $this->present()], 201);
+    }
+
+    /**
+     * Replace every line of one style with the grid's quantities, all of them or none.
+     */
+    public function replaceStyle(Request $request, int $productId): JsonResponse
+    {
+        $data = $request->validate([
+            'lines' => ['present', 'array', 'max:500'],
+            'lines.*.variant_id' => ['nullable', 'integer'],
+            'lines.*.qty' => ['required', 'integer', 'min:1', 'max:100000'],
+        ]);
+
+        $request->merge(['lines' => array_map(fn ($line) => array_merge($line, ['product_id' => $productId]), $data['lines'])]);
+
+        $lines = $data['lines'] ? $this->resolveLines($request) : collect();
+
+        if ($lines instanceof JsonResponse) {
+            return $lines;
+        }
+
+        $existing = Cart::getCart()?->items()->where('product_id', $productId)->whereNull('parent_id')->get() ?? collect();
+
+        if ($existing->contains(fn ($item) => $this->quoteLock->isLocked($item))) {
+            return $this->fail(trans('Quantity is locked by the accepted quote.'), 'QUOTE_LOCKED');
+        }
+
+        try {
+            DB::transaction(function () use ($existing, $lines) {
+                foreach ($existing as $item) {
+                    Cart::removeItem($item->id);
+                }
+
+                $this->addLines($lines);
+
+                Cart::getCart() && Cart::collectTotals();
+            });
+        } catch (\Throwable $e) {
+            Cart::initCart($this->customer());
+
+            return $this->fail($e->getMessage(), 'CART_REJECTED');
+        }
+
+        return response()->json(['data' => $this->present()]);
     }
 
     /**
@@ -177,6 +212,21 @@ class CartController extends Controller
     }
 
     /**
+     * Add resolved lines to the cart.
+     */
+    protected function addLines($lines): void
+    {
+        foreach ($lines as $line) {
+            Cart::addProduct($line['product'], array_filter([
+                'product_id' => $line['product']->id,
+                'quantity' => $line['qty'],
+                'selected_configurable_option' => $line['variant']?->id,
+                'super_attribute' => $line['variant'] ? $this->superAttributes($line['product'], $line['variant']) : null,
+            ]));
+        }
+    }
+
+    /**
      * Map a variant to the option ids the core cart expects.
      */
     protected function superAttributes($product, $variant): array
@@ -226,6 +276,9 @@ class CartController extends Controller
                 'price' => (float) $item->base_price,
                 'total' => (float) $item->base_total,
                 'locked_by_quote' => $this->quoteLock->isLocked($item),
+                'url_key' => $item->product?->url_key,
+                'image' => $item->product?->images->first()?->url,
+                'available' => (int) ($item->child?->product ?? $item->product)?->getTypeInstance()->totalQuantity(),
             ])->values(),
             'moq' => $this->moq->evaluate($this->moq->cartLines($cart)),
             'error' => Cart::hasError() ? Cart::getErrors() : null,

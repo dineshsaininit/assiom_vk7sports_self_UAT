@@ -4,10 +4,13 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use VK7\Wholesale\Repositories\EnquiryRepository;
 use Webkul\B2BSuite\Http\Controllers\Shop\Customer\RegistrationController;
 use Webkul\B2BSuite\Http\Requests\CompanyRequest;
+use Webkul\Checkout\Repositories\CartRepository;
 use Webkul\Customer\Repositories\CustomerRepository;
 
 class AuthController extends Controller
@@ -30,11 +33,43 @@ class AuthController extends Controller
     /**
      * Register a shop through the B2B company sign-up, which applies the approval setting.
      */
-    public function register(CompanyRequest $request, RegistrationController $registrationController): JsonResponse
-    {
-        $registrationController->save($request);
+    public function register(
+        CompanyRequest $request,
+        RegistrationController $registrationController,
+        AccountController $accountController,
+        EnquiryRepository $enquiryRepository,
+    ): JsonResponse {
+        $address = $request->filled('line1') ? $accountController->validateAddress($request) : null;
 
-        $customer = $this->customerRepository->findOneByField('email', $request->input('email'));
+        $profile = $request->validate([
+            'shop_type' => ['nullable', 'string', 'max:100'],
+            'gstin' => ['nullable', 'string', 'max:20'],
+            'proof' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $customer = DB::transaction(function () use ($request, $registrationController, $accountController, $enquiryRepository, $address, $profile) {
+            $registrationController->save($request);
+
+            $customer = $this->customerRepository->findOneByField('email', $request->input('email'));
+
+            if ($address) {
+                $accountController->createAddress($customer, $address, true, $profile['gstin'] ?? null);
+            }
+
+            $enquiryRepository->create([
+                'type' => 'retailer_application',
+                'name' => $customer->name,
+                'business_name' => $request->input('business_name'),
+                'email' => $customer->email,
+                'phone' => $customer->phone,
+                'city' => $address['city'] ?? null,
+                'message' => 'Trade application. Shop type: '.($profile['shop_type'] ?? 'not given')
+                    .'. GSTIN: '.($profile['gstin'] ?? 'not given')
+                    .'. Other proof: '.($profile['proof'] ?? 'not given').'.',
+            ]);
+
+            return $customer;
+        });
 
         return response()->json([
             'data' => [
@@ -121,6 +156,7 @@ class AuthController extends Controller
             : $customer->companies()->first();
 
         return [
+            'cart_count' => (int) app(CartRepository::class)->findOneWhere(['customer_id' => $customer->id, 'is_active' => 1])?->items_qty,
             'id' => $customer->id,
             'first_name' => $customer->first_name,
             'last_name' => $customer->last_name,

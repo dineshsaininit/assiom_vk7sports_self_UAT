@@ -400,3 +400,191 @@ it('lets only signed-in staff open the enquiry queue', function () {
         ->assertOk()
         ->assertSee('Enquiries');
 });
+
+// ====================================================================
+// Account, Addresses And Tracking
+// ====================================================================
+
+it('saves the shop address and application details at registration', function () {
+    $email = 'test-apply-'.uniqid().'@example.test';
+
+    $this->postJson('/api/v1/auth/register', [
+        'business_name' => 'TEST-Apply Traders',
+        'first_name' => 'Test',
+        'last_name' => 'Apply',
+        'email' => $email,
+        'phone' => '98'.random_int(10000000, 99999999),
+        'password' => 'Test-Password-1',
+        'password_confirmation' => 'Test-Password-1',
+        'shop_type' => 'Sports shop',
+        'proof' => 'Shop licence',
+        'label' => 'Main shop',
+        'line1' => '1 Fictional Street',
+        'city' => 'Mumbai',
+        'state' => 'Maharashtra',
+        'pin' => '400001',
+    ])->assertCreated();
+
+    $customer = Customer::where('email', $email)->first();
+
+    expect(DB::table('addresses')->where('customer_id', $customer->id)->value('state'))->toBe('MH');
+
+    expect(DB::table('vk7_enquiries')->where('email', $email)->value('message'))->toContain('Shop licence');
+});
+
+it('manages addresses and keeps them private to the retailer', function () {
+    $alpha = retailer('alpha');
+    $bravo = retailer('bravo');
+
+    $body = ['label' => 'Main shop', 'line1' => '1 Fictional Street', 'city' => 'Mumbai', 'state' => 'Maharashtra', 'pin' => '400001', 'phone' => '9876543210'];
+
+    $first = asRetailer($alpha, 'POST', '/api/v1/account/addresses', $body)
+        ->assertCreated()
+        ->assertJsonPath('data.addresses.0.state', 'MH')
+        ->assertJsonPath('data.addresses.0.is_default', true)
+        ->json('data.addresses.0.id');
+
+    asRetailer($alpha, 'POST', '/api/v1/account/addresses', ['state' => 'Atlantis'] + $body)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('state');
+
+    asRetailer($alpha, 'DELETE', "/api/v1/account/addresses/{$first}")
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'LAST_ADDRESS');
+
+    asRetailer($bravo, 'PUT', "/api/v1/account/addresses/{$first}", $body)->assertNotFound();
+    asRetailer($bravo, 'DELETE', "/api/v1/account/addresses/{$first}")->assertNotFound();
+});
+
+it('changes the password only with the current one', function () {
+    $retailer = retailer();
+
+    asRetailer($retailer, 'PUT', '/api/v1/account/password', [
+        'current_password' => 'wrong',
+        'password' => 'New-Password-1',
+        'password_confirmation' => 'New-Password-1',
+    ])->assertUnprocessable()->assertJsonValidationErrors('current_password');
+
+    asRetailer($retailer, 'PUT', '/api/v1/account/password', [
+        'current_password' => 'Test-Password-1',
+        'password' => 'New-Password-1',
+        'password_confirmation' => 'New-Password-1',
+    ])->assertOk();
+
+    app('auth')->forgetGuards();
+
+    $this->flushHeaders();
+
+    $this->postJson('/api/v1/auth/login', ['email' => $retailer['email'], 'password' => 'New-Password-1'])->assertOk();
+});
+
+it('answers a password reset the same for unknown emails', function () {
+    $this->postJson('/api/v1/auth/forgot', ['email' => 'nobody@example.test'])
+        ->assertOk()
+        ->assertJsonPath('data.sent', true);
+});
+
+it('replaces a style atomically and refuses a locked one', function () {
+    $retailer = retailer();
+
+    $product = Product::where('sku', 'TEST-STYLE-01')->first();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-01', [10, 10])])->assertCreated();
+
+    asRetailer($retailer, 'PUT', "/api/v1/cart/styles/{$product->id}", ['lines' => [['variant_id' => $product->variants[2]->id, 'qty' => 24]]])
+        ->assertOk()
+        ->assertJsonPath('data.items_qty', 24)
+        ->assertJsonCount(1, 'data.items');
+
+    asRetailer($retailer, 'PUT', "/api/v1/cart/styles/{$product->id}", ['lines' => [['variant_id' => $product->variants[2]->id, 'qty' => 9999]]])
+        ->assertUnprocessable()
+        ->assertJsonPath('code', 'CART_REJECTED');
+
+    asRetailer($retailer, 'GET', '/api/v1/cart')->assertJsonPath('data.items_qty', 24);
+});
+
+it('tracks an order only with its number and mobile, and lets the owner cancel it', function () {
+    $alpha = retailer('alpha');
+    $bravo = retailer('bravo');
+
+    asRetailer($alpha, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-04', [24])])->assertCreated();
+
+    $order = checkout($alpha)->assertCreated()->json('data');
+
+    expect($order['order_number'])->toStartWith('VK7-');
+
+    app('auth')->forgetGuards();
+
+    $this->flushHeaders();
+
+    $this->postJson('/api/v1/orders/track', ['number' => $order['order_number'], 'phone' => '9000000000'])->assertNotFound();
+
+    $this->postJson('/api/v1/orders/track', ['number' => $order['order_number'], 'phone' => '9876543210'])
+        ->assertOk()
+        ->assertJsonMissingPath('data.grand_total');
+
+    asRetailer($bravo, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'x'])->assertNotFound();
+
+    asRetailer($alpha, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'Fictional reason'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'canceled');
+});
+// ====================================================================
+// Staff Screens
+// ====================================================================
+
+it('lets a pending retailer sign in after staff approve it in the admin panel', function () {
+    $email = 'test-staff-'.uniqid().'@example.test';
+
+    $this->postJson('/api/v1/auth/register', [
+        'business_name' => 'TEST-Staff Traders',
+        'first_name' => 'Test',
+        'last_name' => 'Staff',
+        'email' => $email,
+        'phone' => '98'.random_int(10000000, 99999999),
+        'password' => 'Test-Password-1',
+        'password_confirmation' => 'Test-Password-1',
+    ])->assertCreated();
+
+    $company = Customer::where('email', $email)->first();
+
+    Customer::where('id', $company->id)->update(['is_verified' => 1]);
+
+    $this->actingAs(Admin::first(), 'admin')
+        ->postJson(route('admin.b2b.companies.update_status', $company->id), ['status' => 1])
+        ->assertOk();
+
+    app('auth')->forgetGuards();
+
+    $this->postJson('/api/v1/auth/login', ['email' => $email, 'password' => 'Test-Password-1'])->assertOk();
+});
+
+it('lets a retailer accept an offer sent from the admin panel', function () {
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-01', [12, 12])])->assertCreated();
+
+    $quote = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'Staff offer'])->assertCreated()->json('data');
+
+    app('auth')->forgetGuards();
+
+    $this->flushHeaders();
+
+    $this->actingAs(Admin::first(), 'admin')
+        ->post(route('admin.b2b.quotes.submit_quote', $quote['id']), [
+            'message' => 'Fictional offer',
+            'status' => 'negotiation',
+            'items' => collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => [
+                'discount_type' => 'percent',
+                'discount_value' => 10,
+                'negotiated_qty' => $item['qty'],
+            ]])->all(),
+        ])
+        ->assertRedirect();
+
+    asRetailer($retailer, 'GET', "/api/v1/quotes/{$quote['id']}")->assertJsonPath('data.can_accept', true);
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/accept")->assertOk();
+
+    expect((float) asRetailer($retailer, 'GET', '/api/v1/cart')->json('data.items.0.price'))->toBe(450.0);
+});

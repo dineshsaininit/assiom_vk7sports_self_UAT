@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use VK7\Wholesale\Http\Controllers\Api\AccountController;
 use VK7\Wholesale\Http\Controllers\Api\AuthController;
 use VK7\Wholesale\Http\Controllers\Api\CartController;
 use VK7\Wholesale\Http\Controllers\Api\CatalogController;
@@ -36,6 +37,14 @@ Route::group([
             ->middleware('throttle:vk7-login')
             ->name('auth.login');
 
+        Route::post('auth/forgot', [AccountController::class, 'forgot'])
+            ->middleware('throttle:vk7-forms')
+            ->name('auth.forgot');
+
+        Route::post('orders/track', [OrderController::class, 'track'])
+            ->middleware('throttle:vk7-forms')
+            ->name('orders.track');
+
         Route::post('enquiries', [EnquiryController::class, 'store'])
             ->middleware('throttle:vk7-forms')
             ->name('enquiries.store');
@@ -51,10 +60,30 @@ Route::group([
 
         Route::post('moq/check', [CartController::class, 'check'])->name('moq.check');
 
+        Route::get('enquiries/mine', [EnquiryController::class, 'mine'])->name('enquiries.mine');
+
+        Route::controller(AccountController::class)->prefix('account')->name('account.')->group(function () {
+            Route::get('', 'show')->name('show');
+
+            Route::put('', 'update')->name('update');
+
+            Route::put('password', 'password')->name('password');
+
+            Route::post('addresses', 'storeAddress')->name('addresses.store');
+
+            Route::put('addresses/{id}', 'updateAddress')->name('addresses.update');
+
+            Route::delete('addresses/{id}', 'destroyAddress')->name('addresses.destroy');
+
+            Route::post('addresses/{id}/default', 'defaultAddress')->name('addresses.default');
+        });
+
         Route::controller(CartController::class)->prefix('cart')->name('cart.')->group(function () {
             Route::get('', 'show')->name('show');
 
             Route::post('items', 'store')->name('items.store');
+
+            Route::put('styles/{productId}', 'replaceStyle')->name('styles.replace');
 
             Route::put('items/{id}', 'update')->name('items.update');
 
@@ -91,6 +120,8 @@ Route::group([
             Route::get('', 'index')->name('index');
 
             Route::get('{id}', 'show')->name('show');
+
+            Route::post('{id}/cancel', 'cancel')->name('cancel');
         });
     });
 });

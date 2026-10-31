@@ -77,6 +77,7 @@ php artisan vk7:demo-data
 ```
 
 - `vk7:apply-policy` writes the planning defaults (24 per style, hidden guest prices, company approval, 7-day quotes, offline payment). **Without it the minimum is off**, and the rest of the rules fall back to their defaults.
+- `vk7:apply-policy` clears the cache, because settings are cached. If you change `core_config` directly, run `php artisan cache:clear`, or the old values stay in use.
 - `vk7:demo-data` creates 4 fictional categories and styles with 32 variants. It refuses to run in production.
 
 **Change the admin password straight away.** The installer creates `admin@example.com` with an upstream default password.
@@ -101,7 +102,13 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 API: `http://127.0.0.1:8000/api/v1/meta`. Admin: `http://127.0.0.1:8000/admin`.
 
-To approve a retailer, activate the company in the B2B Companies screen in admin. To send an offer, use the B2B quote screens. Neither screen has been run in this setup yet.
+Serve the website from the `frontend` folder and open `http://127.0.0.1:8080`:
+
+```bash
+php -S 127.0.0.1:8080 -t .
+```
+
+To approve a retailer, activate the company in the B2B Companies screen in admin. To send an offer, use the B2B quote screens. Their routes are covered by automated tests; the screens have not been clicked through in a browser yet.
 
 CORS currently allows any origin in `config/cors.php`. That is safe for token calls in development. Restrict it to the frontend's address before any deployment.
 
