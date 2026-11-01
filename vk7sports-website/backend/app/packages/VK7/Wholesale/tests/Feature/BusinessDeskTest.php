@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use VK7\Wholesale\Couriers\DemoCourier;
 use VK7\Wholesale\Models\OrderTerm;
 use VK7\Wholesale\Models\Payment;
 use VK7\Wholesale\Payments\PaymentGateway;
@@ -307,7 +308,7 @@ it('dispatches, tracks and collects the balance after delivery', function () {
         ->and($order['tracking']['simulated'])->toBeTrue()
         ->and(Order::find($orderId)->shipments)->toHaveCount(1);
 
-    foreach (range(1, 4) as $scan) {
+    foreach (range(1, 12) as $scan) {
         $order = asStaff($staff, 'POST', "/api/v1/admin/shipments/{$order['tracking']['id']}/refresh")->assertOk()->json('data');
     }
 
@@ -317,7 +318,8 @@ it('dispatches, tracks and collects the balance after delivery', function () {
 
     $retailerView = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->assertOk()->json('data');
 
-    expect($retailerView['tracking']['events'])->toHaveCount(5);
+    expect(count($retailerView['tracking']['events']))->toBeGreaterThanOrEqual(5)
+        ->and(end($retailerView['tracking']['events'])['status'])->toBe('Delivered');
 
     $start = asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'balance'])->assertCreated();
 
@@ -423,4 +425,37 @@ it('suspends a client and ends their session', function () {
         ->assertJsonPath('data.status', 'suspended');
 
     asRetailer($retailer, 'GET', '/api/v1/orders')->assertUnauthorized();
+});
+
+// ====================================================================
+// Demo Courier
+// ====================================================================
+
+it('routes a demo shipment through hubs on the way and scans each one', function () {
+    $courier = new DemoCourier;
+
+    $booking = $courier->book([
+        'origin' => ['city' => 'Mumbai', 'state' => 'MH'],
+        'destination' => ['city' => 'Lucknow', 'state' => 'Uttar Pradesh'],
+    ]);
+
+    $stops = array_column($booking['route'], 'label');
+
+    $scans = $courier->track($booking['waybill'], ['route' => $booking['route'], 'scans' => 50]);
+
+    expect($stops[0])->toBe('Mumbai')
+        ->and(end($stops))->toBe('Lucknow')
+        ->and(count($stops))->toBeGreaterThan(2)
+        ->and($stops)->toBe(array_unique($stops))
+        ->and(array_column($scans, 'location'))->toContain($stops[1])
+        ->and(end($scans)['status'])->toBe('Delivered');
+});
+
+it('goes straight to the destination on a short demo shipment', function () {
+    $booking = (new DemoCourier)->book([
+        'origin' => ['city' => 'Mumbai', 'state' => 'MH'],
+        'destination' => ['city' => 'Pune', 'state' => 'Maharashtra'],
+    ]);
+
+    expect(array_column($booking['route'], 'label'))->toBe(['Mumbai', 'Pune']);
 });

@@ -32,6 +32,8 @@
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     check: '<path d="m5 12 5 5 9-10"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     box: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
     truck: '<path d="M2 6h12v10H2zM14 10h4l4 4v2h-8z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
     layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
@@ -105,15 +107,82 @@
     s.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Could not load ' + src));
     document.head.appendChild(s);
   });
-  const trackingPanel = (t, action) => html`<div class="card"><div class="card-head"><div><h3>Delivery tracking</h3><span class="small muted">${t.courier} · <span class="mono">${t.waybill}</span></span></div>${badge(t.status)}</div>
-    <div class="card-pad stack">
-      ${t.simulated ? notice('info', null, 'Sample tracking: this is a demo courier, so the route and scans are simulated.') : ''}
-      <div class="scan-grid"><div class="map" data-map></div>
-      <div>${t.delivered_at ? html`<p class="small muted">Delivered on ${dateTime(t.delivered_at)}</p>` : t.expected_on ? html`<p class="small muted">Expected by ${date(t.expected_on)}</p>` : ''}
-        <ol class="timeline">${t.events.slice().reverse().map(e => html`<li><strong>${e.status}</strong><div class="small muted">${e.location} · ${dateTime(e.occurred_at)}</div><div class="small">${e.description}</div></li>`)}</ol></div></div>
-      ${t.tracking_url ? html`<a class="link" href="${t.tracking_url}" target="_blank" rel="noopener">Track on the courier's website</a>` : ''}
-      ${action || ''}
-    </div></div>`;
+  const MILESTONES = ['Picked up', 'In transit', 'Out for delivery', 'Delivered'];
+  const milestone = t => {
+    const seen = t.events.map(e => e.status);
+    if (t.delivered_at || seen.includes('Delivered')) return 3;
+    if (seen.includes('Out for delivery')) return 2;
+    return seen.length > 1 ? 1 : 0;
+  };
+  const dayLabel = d => {
+    const when = new Date(d), today = new Date(), yesterday = new Date(Date.now() - 864e5);
+    if (when.toDateString() === today.toDateString()) return 'Today';
+    if (when.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return when.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+  const longDay = d => new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  const timeOf = d => new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const scanDays = events => {
+    const days = [];
+    events.slice().reverse().forEach(e => {
+      const label = dayLabel(e.occurred_at), last = days[days.length - 1];
+      if (last && last.label === label) last.scans.push(e); else days.push({ label, scans: [e] });
+    });
+    return days;
+  };
+  const trackingPanel = (t, action) => {
+    const step = milestone(t), latest = t.events[t.events.length - 1] || {}, done = step === 3;
+    const route = (t.route || []).map(p => p.label).filter((c, i, all) => c !== all[i - 1]);
+    const heading = done ? 'Delivered' : t.expected_on ? 'Arriving by' : 'On the way';
+    const when = done ? (t.delivered_at ? longDay(t.delivered_at) : '') : t.expected_on ? longDay(t.expected_on) : latest.location;
+    let first = true;
+    return html`<section class="card trk" aria-label="Delivery tracking">
+      <div class="trk-hero ${done ? 'is-done' : ''}">
+        <div><div class="trk-eyebrow">${heading}</div><div class="trk-eta">${when || ''}</div><div class="trk-now">${latest.description || ''}</div></div>
+        <div class="trk-awb"><span class="trk-eyebrow">${t.courier}</span>
+          <button class="trk-copy" type="button" data-copy="${t.waybill}" aria-label="Copy tracking number ${t.waybill}"><span class="mono">${t.waybill}</span>${icon('copy', 15)}</button></div>
+      </div>
+      <ol class="trk-steps" style="--trk-done:${step / (MILESTONES.length - 1)}">${MILESTONES.map((m, i) => html`<li class="${i < step || done ? 'done' : i === step ? 'now' : ''}" ${i === step ? raw('aria-current="step"') : ''}><span class="trk-dot">${i <= step ? icon(i === step && !done ? 'truck' : 'check', 15) : ''}</span>${m}</li>`)}</ol>
+      <div class="scan-grid">
+        <div class="trk-map-wrap"><div class="map" data-map role="img" aria-label="Map of the delivery route"></div>
+          <div class="trk-chip"><span class="trk-live ${done ? 'is-done' : ''}"></span>${latest.status || t.status}${latest.location ? ', ' + latest.location : ''}</div></div>
+        <div class="trk-side">
+          ${route.length > 1 ? html`<div class="trk-route">${route.map((c, i) => html`${i ? icon('arrow', 14) : ''}<span>${c}</span>`)}</div>` : ''}
+          <h4>Tracking history</h4>
+          ${scanDays(t.events).map(d => html`<div class="trk-day">${d.label}</div><ol class="trk-scans">${d.scans.map(e => {
+            const current = first; first = false;
+            return html`<li class="${current ? 'is-now' : ''}"><time>${timeOf(e.occurred_at)}</time><div><strong>${e.status}</strong><div class="small">${e.description}</div><div class="small muted">${e.location}</div></div></li>`;
+          })}</ol>`)}
+        </div>
+      </div>
+      <div class="trk-foot">
+        ${t.simulated ? html`<p class="small muted mb-0">Demo courier: the route and scans are simulated until a courier partner is connected.</p>` : ''}
+        ${t.tracking_url ? html`<a class="link" href="${t.tracking_url}" target="_blank" rel="noopener">Track on the courier's website</a>` : ''}
+        ${action || ''}
+      </div>
+    </section>`;
+  };
+  document.addEventListener('click', async ev => {
+    const b = ev.target.closest && ev.target.closest('[data-copy]');
+    if (!b) return;
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast('Tracking number copied'); }
+    catch (e) { toast('Could not copy. Please select the number instead.', true); }
+  });
+
+  /* Works out where the truck is: at the latest stop, or part way to the next one once it has left. */
+  const truckPosition = (t, stops) => {
+    const latest = t.events.filter(e => e.lat != null).pop();
+    if (!latest) return { index: 0, at: stops[0], from: stops[0] };
+    const here = [Number(latest.lat), Number(latest.lng)];
+    const gap = p => (p[0] - here[0]) ** 2 + (p[1] - here[1]) ** 2;
+    let index = stops.reduce((best, p, i) => gap(p) <= gap(stops[best]) ? i : best, 0);
+    const named = stops.map((p, i) => i).filter(i => t.route[i].label === latest.location).pop();
+    if (named != null) index = named;
+    const next = stops[index + 1];
+    if (latest.status === 'In transit' && next) return { index, at: [here[0] + (next[0] - here[0]) * .45, here[1] + (next[1] - here[1]) * .45], from: here };
+    return { index: Math.max(index - 1, 0), at: here, from: stops[Math.max(index - 1, 0)] };
+  };
+  const tip = s => { const e = document.createElement('span'); e.textContent = s; return e; };
   const mountMap = async (root, t) => {
     const el = root.querySelector('[data-map]');
     if (!el) return;
@@ -124,14 +193,45 @@
       }
       await loadScript(LEAFLET + 'leaflet.min.js');
       if (!el.isConnected) return;
-      const points = (t.route || []).map(p => [p.lat, p.lng]);
+      const stops = (t.route || []).map(p => [Number(p.lat), Number(p.lng)]);
+      if (!stops.length) return fail();
       const map = L.map(el, { scrollWheelZoom: false, attributionControl: true });
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 12, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
-      L.polyline(points, { color: '#0A1121', weight: 3, dashArray: '6 6' }).addTo(map);
-      (t.route || []).forEach(p => L.circleMarker([p.lat, p.lng], { radius: 5, color: '#0A1121', fillColor: '#fff', fillOpacity: 1 }).bindTooltip(p.label).addTo(map));
-      const latest = t.events.filter(e => e.lat != null).pop();
-      if (latest) L.circleMarker([latest.lat, latest.lng], { radius: 9, color: '#E31B23', fillColor: '#E31B23', fillOpacity: .9 }).bindTooltip(latest.status + ', ' + latest.location, { permanent: true, direction: 'top' }).addTo(map);
-      map.fitBounds(points, { padding: [32, 32] });
+      map.fitBounds(stops, { paddingTopLeft: [70, 96], paddingBottomRight: [70, 36], maxZoom: 9 });
+      L.polyline(stops, { color: '#68707E', weight: 3, dashArray: '2 8', lineCap: 'round' }).addTo(map);
+
+      const done = milestone(t) === 3, truck = truckPosition(t, stops);
+      const trail = stops.slice(0, truck.index + 1).concat([truck.from]);
+      const travelled = L.polyline(trail, { color: '#E31B23', weight: 5, lineCap: 'round' }).addTo(map);
+
+      const last = stops[stops.length - 1];
+      const sameSpot = stops.length > 1 && stops[0][0] === last[0] && stops[0][1] === last[1];
+      stops.forEach((p, i) => {
+        if (sameSpot && i === 0) return;
+        const ends = i === 0 || i === stops.length - 1, passed = i <= truck.index;
+        L.circleMarker(p, { radius: ends ? 7 : 5, weight: 3, color: passed ? '#E31B23' : '#0A1121', fillColor: i === 0 ? '#0A1121' : '#fff', fillOpacity: 1 })
+          .bindTooltip(tip(t.route[i].label), ends ? { permanent: true, direction: 'bottom', offset: [0, 10], className: 'trk-label' } : { className: 'trk-label' }).addTo(map);
+      });
+
+      const glyph = done ? ICONS.check : ICONS.truck;
+      const marker = L.marker(truck.from, { keyboard: false, interactive: false, zIndexOffset: 1000, icon: L.divIcon({
+        className: '', iconSize: [40, 40], iconAnchor: [20, 20],
+        html: `<div class="trk-pin ${done ? 'is-done' : ''}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${glyph}</svg></div>`
+      }) }).addTo(map);
+
+      const place = f => {
+        const now = [truck.from[0] + (truck.at[0] - truck.from[0]) * f, truck.from[1] + (truck.at[1] - truck.from[1]) * f];
+        marker.setLatLng(now);
+        travelled.setLatLngs(trail.slice(0, -1).concat([now]));
+      };
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return place(1);
+      const began = performance.now();
+      const drive = now => {
+        const f = Math.min((now - began) / 1800, 1);
+        place(1 - (1 - f) ** 3);
+        if (f < 1 && el.isConnected) requestAnimationFrame(drive);
+      };
+      requestAnimationFrame(drive);
     } catch (e) { fail(); }
   };
 

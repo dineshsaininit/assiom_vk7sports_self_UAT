@@ -7,7 +7,7 @@ The whole system runs on PostgreSQL 17. These files create an empty, working dat
 | `vk7sports_schema.sql` | All 182 tables, indexes and foreign keys |
 | `vk7sports_base_data.sql` | The base records the system needs to start: currency, locale, channel, product attributes, staff roles, default rules. No customers, products, orders or passwords. |
 
-Both were loaded into an empty PostgreSQL 17.5 database and tested. They have not been run on Neon itself yet.
+Both load cleanly into an empty database on PostgreSQL 17.5 and on Neon's PostgreSQL 18.6. On a slow connection the load can take about 8 minutes.
 
 ## 1. Create the database
 
@@ -18,7 +18,7 @@ The password in that string is a secret. Never commit it.
 
 ## 2. Load the files
 
-Run both from `docs/database`, schema first. `psql` is the reliable way, because these files are too large for the Neon SQL editor to be dependable:
+Run both from `docs/database`, schema first. Use `psql`, not the Neon SQL editor: one load left only 15 of the 182 tables in place, with no working data. Afterwards, check that the database has 182 tables in `public`.
 
 ```bash
 psql "postgresql://USER:PASSWORD@HOST/neondb?sslmode=require" -v ON_ERROR_STOP=1 -f vk7sports_schema.sql
@@ -72,6 +72,8 @@ It prints a password **once**. Save it, then sign in at `admin-login.html`.
 
 - **Photos are not in the database.** Uploads are saved on the server in `storage/app/public`. Back that folder up as well, and keep it when moving servers.
 - **Later code changes** reach Neon through `php artisan migrate --force`. The SQL files are for the first setup only.
+- **Host the backend in the same region as the database.** Each query travels to the database and back, so distance adds up fast. From India to a Neon database in `us-east-2`, each API call took 10 to 16 seconds with `CACHE_STORE=file` and `SESSION_DRIVER=file`, and 25 to 55 seconds without them.
+- **Do not set `PDO::ATTR_EMULATE_PREPARES`.** It breaks true/false comparisons on PostgreSQL.
 - **Neon may pause when idle.** The first request after a pause can take a few seconds.
 - **Automated tests must never point at Neon.** They use a separate database, set in `.env.testing`.
 - **`vk7:demo-data` only runs in the test environment.** It refuses to add fictional products anywhere else.
