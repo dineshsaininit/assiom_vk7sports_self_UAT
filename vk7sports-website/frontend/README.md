@@ -25,6 +25,7 @@ Bagisto's own admin panel is closed and redirects here. Set `VK7_ADMIN_URL` in t
 | `assets/css/vk7.css` | Design system: navy `#0A1121`, red `#E31B23`, Montserrat and Inter |
 | `assets/js/config.js` | The backend's address |
 | `assets/js/api.js` | Every call to the backend |
+| `assets/js/i18n.js`, `assets/lang/` | Website languages: English, Hindi and Marathi. To add one, add it to `LANGUAGES` in `i18n.js` and create its file in `assets/lang/`. Admin pages and invoices stay in English. |
 | `assets/js/ui.js` | Header, footer, forms, status badges, size and colour grid, tracking map, invoice |
 | `assets/js/pages-*.js` | Page content: public, retailer account, admin |
 | `assets/img/products/` | Supplied photos. The home, about and customised pages use a few of them. Catalogue photos are uploaded in the admin. |

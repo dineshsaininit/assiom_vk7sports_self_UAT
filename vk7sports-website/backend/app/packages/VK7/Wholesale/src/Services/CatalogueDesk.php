@@ -360,6 +360,7 @@ class CatalogueDesk
                 'status' => 1,
                 'color' => $variant->color,
                 'size' => $variant->size,
+                'images' => $this->keptImages($variant),
                 'inventories' => [$sourceId => $stock ?? (int) DB::table('product_inventories')->where('product_id', $variant->id)->sum('qty')],
             ];
         }
@@ -383,10 +384,19 @@ class CatalogueDesk
             'weight' => (float) ($data['weight'] ?? 0.3),
             'channels' => [$channel->id],
             'categories' => [$data['category_id']],
+            'images' => $this->keptImages($product),
             'variants' => $variants + $newVariants,
         ], $product->id);
 
         Event::dispatch('catalog.product.update.after', $product->fresh());
+    }
+
+    /**
+     * List a product's photos so Bagisto keeps them; it deletes any photo left out of an update.
+     */
+    protected function keptImages($product): array
+    {
+        return ['files' => $product->images()->orderBy('position')->pluck('path', 'id')->all()];
     }
 
     /**

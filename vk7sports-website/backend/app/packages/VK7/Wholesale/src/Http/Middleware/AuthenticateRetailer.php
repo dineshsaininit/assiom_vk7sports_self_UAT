@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
 use Webkul\Checkout\Facades\Cart;
+use Webkul\Customer\Contracts\Customer;
 
 class AuthenticateRetailer
 {
@@ -57,7 +58,7 @@ class AuthenticateRetailer
         $customer = $token->tokenable;
 
         if (
-            ! $customer
+            ! $customer instanceof Customer
             || ! $customer->status
             || ! $customer->is_verified
             || $customer->is_suspended

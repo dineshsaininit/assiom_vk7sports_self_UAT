@@ -80,7 +80,9 @@
         <div style="margin-top:auto;padding-top:6px">${priceBlock(p, me)}</div>
       </div></a>`;
   };
-  const priceBlock = (p, me) => p.price != null
+  const priceBlock = (p, me) => p.price === 0
+    ? html`<div class="price"><small>Price to be confirmed</small></div>`
+    : p.price != null
     ? html`<div class="price">${money(p.price)} <small>per piece, excl. GST</small></div>`
     : me && me.kind === 'retailer'
       ? html`<div class="price-lock">${icon('lock', 14)} Price after approval</div>`
@@ -157,7 +159,7 @@
       </div>
       <div class="trk-foot">
         ${t.simulated ? html`<p class="small muted mb-0">Demo courier: the route and scans are simulated until a courier partner is connected.</p>` : ''}
-        ${t.tracking_url ? html`<a class="link" href="${t.tracking_url}" target="_blank" rel="noopener">Track on the courier's website</a>` : ''}
+        ${/^https?:\/\//i.test(t.tracking_url || '') ? html`<a class="link" href="${t.tracking_url}" target="_blank" rel="noopener noreferrer">Track on the courier's website</a>` : ''}
         ${action || ''}
       </div>
     </section>`;
@@ -401,6 +403,11 @@
   const current = href => here() === href ? raw('aria-current="page"') : '';
 
 
+  const langPicker = () => {
+    const i = window.VK7_I18N;
+    if (!i || !i.showPicker) return '';
+    return html`<label class="sr" for="site-lang">Language</label><select id="site-lang" class="lang" data-lang data-no-i18n>${i.languages.map(l => html`<option value="${l[0]}" ${l[0] === i.lang ? raw('selected') : ''}>${l[1]}</option>`)}</select>`;
+  };
   const header = me => {
     const account = !me ? ['Sign in', 'login.html'] : me.kind === 'staff' ? ['Staff area', 'admin.html'] : ['My account', 'account.html'];
     return html`
@@ -410,6 +417,7 @@
       <nav class="nav" aria-label="Main">${PUBLIC_NAV.map(n => html`<a href="${n[1]}" ${current(n[1])}>${n[0]}</a>`)}</nav>
       <form class="hdr-search" role="search" action="catalogue.html"><label class="sr" for="site-q">Search products</label>${icon('search')}<input id="site-q" name="q" type="search" placeholder="Search products" value="${param('q') || ''}"></form>
       <div class="hdr-tools">
+        ${langPicker()}
         <a class="tool" href="${account[1]}">${icon('user', 20)}<span class="lbl">${account[0]}</span></a>
         ${me && me.kind === 'retailer' && me.approved ? html`<a class="tool" href="cart.html" aria-label="Order list, ${me.cartCount} pieces">${icon('cart', 20)}${me.cartCount ? html`<span class="count">${me.cartCount}</span>` : ''}</a>` : ''}
       </div>

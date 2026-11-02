@@ -2,8 +2,10 @@
 
 namespace VK7\Wholesale\Http\Controllers\Api;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller as BaseController;
+use Throwable;
 
 abstract class Controller extends BaseController
 {
@@ -13,6 +15,24 @@ abstract class Controller extends BaseController
     protected function fail(string $message, string $code, int $status = 422, array $extra = []): JsonResponse
     {
         return response()->json(array_merge(['message' => $message, 'code' => $code], $extra), $status);
+    }
+
+    /**
+     * Pass on a business message, but log a technical failure and show the fallback instead.
+     */
+    protected function publicMessage(Throwable $e, string $fallback): string
+    {
+        if (
+            $e instanceof QueryException
+            || $e instanceof \PDOException
+            || $e instanceof \Error
+        ) {
+            report($e);
+
+            return $fallback;
+        }
+
+        return $e->getMessage();
     }
 
     /**

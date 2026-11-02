@@ -12,6 +12,11 @@ use Webkul\Sales\Repositories\OrderRepository;
 class OrderController extends Controller
 {
     /**
+     * Digits a mobile number must have to open public order tracking.
+     */
+    public const TRACKING_PHONE_DIGITS = 10;
+
+    /**
      * Create a new controller instance.
      */
     public function __construct(
@@ -29,7 +34,7 @@ class OrderController extends Controller
 
         $orders = $this->orderRepository->scopeQuery(
             fn ($query) => $query->whereIn('customer_id', $this->buyerIds())->orderByDesc('id')
-        )->paginate(min((int) $request->query('limit', 15), 100));
+        )->paginate(max(1, min((int) $request->query('limit', 15), 100)));
 
         return response()->json([
             'data' => collect($orders->items())->map(fn ($order) => $this->summary($order))->values(),
@@ -152,6 +157,7 @@ class OrderController extends Controller
 
         if (
             ! $order
+            || strlen($phone) !== self::TRACKING_PHONE_DIGITS
             || ! $order->addresses->contains(fn ($address) => substr(preg_replace('/\D/', '', (string) $address->phone), -10) === $phone)
         ) {
             return $this->fail(trans('No order matches that number and mobile.'), 'NOT_FOUND', 404);

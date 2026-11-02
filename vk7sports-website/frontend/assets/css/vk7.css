@@ -465,6 +465,13 @@ a.stat:hover { border-color: var(--navy); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
+/* Language picker and Indian-language fonts */
+.lang { min-height: 36px; max-width: 96px; padding: 4px 6px; font-size: 13px; font-weight: 500; color: var(--white); background: transparent; border: 1px solid rgba(255,255,255,.3); border-radius: var(--r-sm); cursor: pointer; }
+.lang option { color: var(--ink); background: var(--white); }
+.lang:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+html[lang="hi"], html[lang="mr"] { --font: 'Nirmala UI', 'Noto Sans Devanagari', 'Mangal', 'Inter', sans-serif; --head: 'Nirmala UI', 'Noto Sans Devanagari', 'Mangal', 'Montserrat', sans-serif; }
+html[lang="hi"] h1, html[lang="hi"] h2, html[lang="hi"] h3, html[lang="mr"] h1, html[lang="mr"] h2, html[lang="mr"] h3 { letter-spacing: 0; line-height: 1.35; }
+
 /* Courier tracking map */
 .map { height: 100%; min-height: 420px; background: var(--bg); z-index: 0; }
 .map-note { display: grid; place-items: center; color: var(--ink-3); font-size: 13px; }

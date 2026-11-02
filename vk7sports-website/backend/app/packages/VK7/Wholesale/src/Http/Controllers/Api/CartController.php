@@ -79,7 +79,7 @@ class CartController extends Controller
         } catch (\Throwable $e) {
             Cart::initCart($this->customer());
 
-            return $this->fail($e->getMessage(), 'CART_REJECTED');
+            return $this->fail($this->publicMessage($e, trans('Your order list could not be updated. Please try again.')), 'CART_REJECTED');
         }
 
         return response()->json(['data' => $this->present()], 201);
@@ -123,7 +123,7 @@ class CartController extends Controller
         } catch (\Throwable $e) {
             Cart::initCart($this->customer());
 
-            return $this->fail($e->getMessage(), 'CART_REJECTED');
+            return $this->fail($this->publicMessage($e, trans('Your order list could not be updated. Please try again.')), 'CART_REJECTED');
         }
 
         return response()->json(['data' => $this->present()]);
@@ -149,7 +149,7 @@ class CartController extends Controller
         try {
             Cart::updateItems(['qty' => [$id => $data['qty']]]);
         } catch (\Throwable $e) {
-            return $this->fail($e->getMessage(), 'CART_REJECTED');
+            return $this->fail($this->publicMessage($e, trans('Your order list could not be updated. Please try again.')), 'CART_REJECTED');
         }
 
         return response()->json(['data' => $this->present()]);

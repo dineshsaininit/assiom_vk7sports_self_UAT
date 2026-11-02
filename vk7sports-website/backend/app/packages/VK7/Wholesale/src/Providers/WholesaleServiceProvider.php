@@ -5,6 +5,7 @@ namespace VK7\Wholesale\Providers;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Event;
@@ -20,6 +21,7 @@ use VK7\Wholesale\Couriers\CourierProvider;
 use VK7\Wholesale\Exceptions\Handler;
 use VK7\Wholesale\Http\Middleware\Bouncer;
 use VK7\Wholesale\Http\Middleware\CloseBagistoAdmin;
+use VK7\Wholesale\Http\Middleware\CloseBagistoShop;
 use VK7\Wholesale\Http\Middleware\HidePricesFromGuests;
 use VK7\Wholesale\Moq;
 use VK7\Wholesale\OrderNumberSequencer;
@@ -72,6 +74,8 @@ class WholesaleServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(dirname(__DIR__).'/Routes/api.php');
 
         $this->loadRoutesFrom(dirname(__DIR__).'/Routes/admin.php');
+
+        $this->app->make(Kernel::class)->prependMiddleware(CloseBagistoShop::class);
 
         $router->pushMiddlewareToGroup('web', CloseBagistoAdmin::class);
 

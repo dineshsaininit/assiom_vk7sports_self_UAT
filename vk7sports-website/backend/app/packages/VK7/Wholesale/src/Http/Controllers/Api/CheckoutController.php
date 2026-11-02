@@ -137,7 +137,7 @@ class CheckoutController extends Controller
                 $order->comments()->create(['comment' => $comment, 'customer_notified' => 0]);
             }
         } catch (\Exception $e) {
-            return $this->fail($e->getMessage(), 'ORDER_REJECTED');
+            return $this->fail($this->publicMessage($e, trans('Your order could not be placed. Please try again.')), 'ORDER_REJECTED');
         } finally {
             $lock->release();
         }

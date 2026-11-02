@@ -15,7 +15,12 @@ class StaffAuthController extends Controller
     /**
      * Failed sign-ins allowed per email and address before waiting.
      */
-    public const MAX_LOGIN_ATTEMPTS = 6;
+    public const MAX_LOGIN_ATTEMPTS = 5;
+
+    /**
+     * Seconds a staff sign-in stays blocked after too many failures.
+     */
+    public const LOGIN_LOCK_SECONDS = 900;
 
     /**
      * Hours a staff token stays valid.
@@ -40,7 +45,7 @@ class StaffAuthController extends Controller
         $key = 'vk7-staff-login|'.strtolower($data['email']).'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($key, self::MAX_LOGIN_ATTEMPTS)) {
-            return $this->fail(trans('Too many attempts. Try again in a minute.'), 'TOO_MANY_ATTEMPTS', 429);
+            return $this->fail(trans('Too many attempts. Please try again in 15 minutes.'), 'TOO_MANY_ATTEMPTS', 429);
         }
 
         $staff = $this->adminRepository->findOneByField('email', $data['email']);
@@ -50,7 +55,7 @@ class StaffAuthController extends Controller
             || ! $staff->status
             || ! Hash::check($data['password'], $staff->password)
         ) {
-            RateLimiter::hit($key);
+            RateLimiter::hit($key, self::LOGIN_LOCK_SECONDS);
 
             return $this->fail(trans('The email or password is incorrect.'), 'INVALID_CREDENTIALS', 401);
         }

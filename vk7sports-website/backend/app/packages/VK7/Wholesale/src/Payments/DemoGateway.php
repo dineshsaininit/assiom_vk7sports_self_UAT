@@ -57,11 +57,14 @@ class DemoGateway implements PaymentGateway
     }
 
     /**
-     * Stop simulated payments from ever counting as money on a production system.
+     * Allow simulated payments only on a developer's computer or an explicitly marked demo server.
      */
     protected function assertNotProduction(): void
     {
-        if (app()->isProduction()) {
+        if (
+            ! app()->environment(['local', 'testing'])
+            && ! config('vk7.payments.allow_demo')
+        ) {
             throw new BusinessRuleException(trans('Test payments are not available.'), 'GATEWAY_UNAVAILABLE');
         }
     }

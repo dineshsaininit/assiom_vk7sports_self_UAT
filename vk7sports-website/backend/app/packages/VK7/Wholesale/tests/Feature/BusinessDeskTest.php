@@ -459,3 +459,148 @@ it('goes straight to the destination on a short demo shipment', function () {
 
     expect(array_column($booking['route'], 'label'))->toBe(['Mumbai', 'Pune']);
 });
+
+// ====================================================================
+// Security Regressions
+// ====================================================================
+
+it('does not let a retailer confirm a bank reference as an online payment', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/reference", [
+        'kind' => 'advance',
+        'method' => 'UPI',
+        'reference' => 'UPI12345678',
+    ])->assertCreated();
+
+    $payment = Payment::where('order_id', $orderId)->first();
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/{$payment->id}/confirm", ['simulated_result' => 'success'])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'PAYMENT_NOT_OPEN');
+
+    expect($payment->fresh()->status)->toBe('submitted');
+});
+
+it('refuses simulated payments outside a developer computer unless a demo is allowed', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    app()->detectEnvironment(fn () => 'staging');
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance'])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'GATEWAY_UNAVAILABLE');
+
+    config(['vk7.payments.allow_demo' => true]);
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance'])->assertCreated();
+});
+
+it('does not open order tracking with a blank mobile number', function () {
+    [, $orderId] = placedOrder();
+
+    $order = Order::find($orderId);
+
+    $order->addresses()->update(['phone' => '']);
+
+    test()->postJson('/api/v1/orders/track', ['number' => $order->increment_id, 'phone' => 'none'])
+        ->assertNotFound();
+});
+
+it('closes the old storefront and installer but keeps the API and password links', function () {
+    config(['vk7.site.close_bagisto_shop' => true, 'vk7.site.url' => 'https://site.example']);
+
+    test()->get('/')->assertRedirect('https://site.example');
+
+    test()->get('/customer/register')->assertRedirect('https://site.example');
+
+    test()->get('/api/categories')->assertRedirect('https://site.example');
+
+    test()->postJson('/api/checkout/onepage/orders')->assertNotFound();
+
+    test()->postJson('/customer/register', ['email' => 'late@example.test'])->assertNotFound();
+
+    test()->postJson('/install/api/create-admin-user')->assertNotFound();
+
+    test()->get('/%69nstall')->assertRedirect('https://site.example');
+
+    test()->getJson('/api/v1/meta')->assertOk();
+
+    expect(test()->get('/customer/reset-password/any-token')->status())->toBe(200);
+});
+
+it('refuses a retailer account on staff routes and a staff account on retailer routes', function () {
+    retailer();
+
+    $token = Customer::latest('id')->first()->createToken('all-areas', ['*'], now()->addHour())->plainTextToken;
+
+    asStaff($token, 'GET', '/api/v1/admin/me')->assertUnauthorized();
+
+    $staffToken = Admin::first()->createToken('all-areas', ['*'], now()->addHour())->plainTextToken;
+
+    app('auth')->forgetGuards();
+
+    test()->withToken($staffToken)->getJson('/api/v1/auth/me')->assertUnauthorized();
+});
+
+it('rejects a registration password shorter than eight characters', function () {
+    test()->postJson('/api/v1/auth/register', [
+        'first_name' => 'Short',
+        'last_name' => 'Password',
+        'business_name' => 'TEST Short Password Shop',
+        'email' => 'short-password@example.test',
+        'phone' => '9000000123',
+        'password' => 'abc123',
+        'password_confirmation' => 'abc123',
+    ])->assertStatus(422)->assertJsonValidationErrors('password');
+});
+
+it('locks staff sign-in after repeated failures and keeps it locked', function () {
+    $staff = Admin::first();
+
+    foreach (range(1, 5) as $attempt) {
+        test()->postJson('/api/v1/admin/login', ['email' => $staff->email, 'password' => 'wrong-password'])->assertUnauthorized();
+    }
+
+    test()->postJson('/api/v1/admin/login', ['email' => $staff->email, 'password' => 'wrong-password'])
+        ->assertStatus(429)
+        ->assertJsonPath('code', 'TOO_MANY_ATTEMPTS');
+
+    test()->travel(14)->minutes();
+
+    test()->postJson('/api/v1/admin/login', ['email' => $staff->email, 'password' => 'wrong-password'])->assertStatus(429);
+});
+
+it('does not let a retailer accept their own lower counter-offer', function () {
+    $token = staffToken();
+
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $quote = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated()->json('data');
+
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/offer", [
+        'prices' => collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => $item['price'] - 10])->all(),
+        'message' => 'Staff offer',
+    ])->assertOk();
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/counter", [
+        'message' => 'One rupee please',
+        'items' => collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => ['discount_type' => 'percent', 'discount_value' => 99]])->all(),
+    ])->assertOk();
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/accept")
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'NO_OFFER');
+});
+
+it('shows piece counts on the quote list', function () {
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated();
+
+    asRetailer($retailer, 'GET', '/api/v1/quotes')->assertOk()->assertJsonPath('data.0.pieces', 24);
+});

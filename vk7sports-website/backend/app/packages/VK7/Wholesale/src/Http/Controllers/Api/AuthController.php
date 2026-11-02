@@ -21,6 +21,16 @@ class AuthController extends Controller
     public const MAX_LOGIN_ATTEMPTS = 6;
 
     /**
+     * Seconds a sign-in stays blocked after too many failures.
+     */
+    public const LOGIN_LOCK_SECONDS = 300;
+
+    /**
+     * Shortest password a retailer may choose.
+     */
+    public const MIN_PASSWORD_LENGTH = 8;
+
+    /**
      * Days a retailer token stays valid.
      */
     public const TOKEN_DAYS = 30;
@@ -42,6 +52,7 @@ class AuthController extends Controller
         $address = $request->filled('line1') ? $accountController->validateAddress($request) : null;
 
         $profile = $request->validate([
+            'password' => ['required', 'string', 'min:'.self::MIN_PASSWORD_LENGTH],
             'shop_type' => ['nullable', 'string', 'max:100'],
             'gstin' => ['nullable', 'string', 'max:20'],
             'proof' => ['nullable', 'string', 'max:255'],
@@ -92,7 +103,7 @@ class AuthController extends Controller
         $key = 'vk7-login|'.strtolower($data['email']).'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($key, self::MAX_LOGIN_ATTEMPTS)) {
-            return $this->fail(trans('Too many attempts. Try again in a minute.'), 'TOO_MANY_ATTEMPTS', 429);
+            return $this->fail(trans('Too many attempts. Please try again in a few minutes.'), 'TOO_MANY_ATTEMPTS', 429);
         }
 
         $customer = $this->customerRepository->findOneByField('email', $data['email']);
@@ -101,7 +112,7 @@ class AuthController extends Controller
             ! $customer
             || ! Hash::check($data['password'], $customer->password)
         ) {
-            RateLimiter::hit($key);
+            RateLimiter::hit($key, self::LOGIN_LOCK_SECONDS);
 
             return $this->fail(trans('The email or password is incorrect.'), 'INVALID_CREDENTIALS', 401);
         }

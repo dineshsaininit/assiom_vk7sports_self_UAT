@@ -9,6 +9,7 @@ return [
     'payments' => [
         'gateway' => env('VK7_PAYMENT_GATEWAY', 'demo'),
         'allow_live' => (bool) env('VK7_PAYMENTS_ALLOW_LIVE', false),
+        'allow_demo' => (bool) env('VK7_ALLOW_DEMO_PAYMENTS', false),
         'gateways' => [
             'demo' => DemoGateway::class,
             'razorpay' => RazorpayGateway::class,
@@ -24,6 +25,11 @@ return [
     'admin' => [
         'url' => env('VK7_ADMIN_URL', 'http://127.0.0.1:8080/admin-login.html'),
         'close_bagisto_panel' => (bool) env('VK7_CLOSE_BAGISTO_ADMIN', true),
+    ],
+
+    'site' => [
+        'url' => env('VK7_SITE_URL', 'http://127.0.0.1:8080'),
+        'close_bagisto_shop' => (bool) env('VK7_CLOSE_BAGISTO_SHOP', true),
     ],
 
     'courier' => [

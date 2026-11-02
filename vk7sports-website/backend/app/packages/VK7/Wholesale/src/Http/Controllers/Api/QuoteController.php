@@ -41,7 +41,7 @@ class QuoteController extends Controller
     {
         $quotes = $this->customerQuoteRepository->scopeQuery(
             fn ($query) => $query->where($this->scope())->orderByDesc('id')
-        )->paginate(min((int) $request->query('limit', 15), 100));
+        )->paginate(max(1, min((int) $request->query('limit', 15), 100)));
 
         return response()->json([
             'data' => collect($quotes->items())->map(fn ($quote) => $this->summary($quote))->values(),
@@ -203,7 +203,7 @@ class QuoteController extends Controller
         } catch (\Throwable $e) {
             Cart::initCart($this->customer());
 
-            return $this->fail($e->getMessage(), 'ACCEPT_FAILED');
+            return $this->fail($this->publicMessage($e, trans('This offer could not be accepted. Please try again.')), 'ACCEPT_FAILED');
         }
 
         if ($canAccept) {
@@ -304,6 +304,7 @@ class QuoteController extends Controller
             'state' => $quote->state,
             'total' => (float) $quote->base_total,
             'negotiated_total' => (float) $quote->base_negotiated_total,
+            'pieces' => (int) $quote->items->sum('qty'),
             'expiration_date' => $quote->expiration_date,
             'order_id' => $quote->order_id,
             'created_at' => $quote->created_at,

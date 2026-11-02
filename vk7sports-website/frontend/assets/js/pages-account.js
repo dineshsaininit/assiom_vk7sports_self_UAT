@@ -252,7 +252,7 @@
     const list = await api.quotes.list();
     main.innerHTML = html`${title('My quotes', 'Ask for a better rate from your order list.', html`<a class="btn btn-red" href="cart.html">Open order list</a>`)}
     <div class="card">${list.length ? html`<div class="tw"><table class="t"><thead><tr><th>Quote</th><th>Date</th><th class="num">Pieces</th><th>Valid until</th><th>Status</th></tr></thead><tbody>
-      ${list.map(q => html`<tr class="click" data-href="account-quote.html?id=${q.id}"><td class="mono"><a href="account-quote.html?id=${q.id}">${q.number}</a></td><td>${date(q.createdAt)}</td><td class="num">${pcs(q.lines)}</td><td>${q.validUntil ? date(q.validUntil) : '-'}</td><td>${badge(q.status)}</td></tr>`)}
+      ${list.map(q => html`<tr class="click" data-href="account-quote.html?id=${q.id}"><td class="mono"><a href="account-quote.html?id=${q.id}">${q.number}</a></td><td>${date(q.createdAt)}</td><td class="num">${q.pieces}</td><td>${q.validUntil ? date(q.validUntil) : '-'}</td><td>${badge(q.status)}</td></tr>`)}
     </tbody></table></div>` : empty('No quotes yet', 'Add styles to your order list and choose Request a quote.', html`<a class="btn btn-navy" href="catalogue.html">Browse catalogue</a>`, 'file')}</div>`;
     on(main, '[data-href]', (el, e) => { if (!e.target.closest('a')) location.href = el.dataset.href; });
   });
@@ -321,7 +321,7 @@
   });
 
   page('account-addresses', { layout: 'account', access: 'retailer' }, async main => {
-    const form = a => html`<form class="form" novalidate><input type="hidden" name="id" value="${a.id || ''}">${field('label', 'Label', { required: true, value: a.label || '', placeholder: 'Main shop' })}${field('line1', 'Address', { required: true, value: a.line1 || '' })}<div class="form-2">${field('city', 'City', { required: true, value: a.city || '' })}${field('state', 'State', { required: true, value: a.state || '' })}</div><div class="form-2">${field('pin', 'PIN code', { required: true, value: a.pin || '', maxlength: 6 })}${field('phone', 'Mobile number', { required: true, value: a.phone || '', maxlength: 10 })}</div><button class="btn btn-red" type="submit">Save address</button></form>`;
+    const form = a => html`<form class="form" novalidate><input type="hidden" name="id" value="${a.id || ''}">${field('label', 'Label', { required: true, value: a.label || '', placeholder: 'Main shop' })}${field('line1', 'Address', { required: true, value: a.line1 || '' })}<div class="form-2">${field('city', 'City', { required: true, value: a.city || '' })}${field('state', 'State', { type: 'select', required: true, value: a.state || '', options: [['', 'Select state'], ...window.VK7_STATES] })}</div><div class="form-2">${field('pin', 'PIN code', { required: true, value: a.pin || '', maxlength: 6 })}${field('phone', 'Mobile number', { required: true, value: a.phone || '', maxlength: 10 })}</div><button class="btn btn-red" type="submit">Save address</button></form>`;
     const render = async () => {
       const r = await api.account.get();
       main.innerHTML = html`${title('Addresses', null, html`<button class="btn btn-red" data-add>Add address</button>`)}

@@ -423,7 +423,7 @@
         <h3>Your shop</h3>
         <div class="form-2">${field('company', 'Shop or business name', { required: true, autocomplete: 'organization' })}${field('shopType', 'Type of business', { type: 'select', required: true, options: [['', 'Select'], 'Sports shop', 'Clothing store', 'Gym and fitness store', 'Distributor', 'Other'] })}</div>
         ${field('address', 'Shop address', { required: true, autocomplete: 'street-address' })}
-        <div class="form-2">${field('city', 'City', { required: true })}${field('state', 'State', { required: true })}</div>
+        <div class="form-2">${field('city', 'City', { required: true })}${field('state', 'State', { type: 'select', required: true, options: [['', 'Select state'], ...window.VK7_STATES] })}</div>
         <div class="form-2">${field('pin', 'PIN code', { required: true, inputmode: 'numeric', maxlength: 6 })}<span></span></div>
         <h3>Proof of business</h3>
         <div class="form-2">${field('gstin', 'GSTIN', { maxlength: 15, hint: 'Enter your GSTIN if you have one.' })}${field('proof', 'Or another proof', { hint: 'For example: shop licence or Udyam certificate.' })}</div>

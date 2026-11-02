@@ -150,6 +150,10 @@ class OrderFinance
             return;
         }
 
+        if ($payment->status !== 'created') {
+            throw new BusinessRuleException(trans('This payment cannot be confirmed online.'), 'PAYMENT_NOT_OPEN');
+        }
+
         $this->settle($payment, $this->gateway->verify($payment, $result), 'Payment gateway');
     }
 

@@ -5,6 +5,7 @@ namespace VK7\Wholesale\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
+use Webkul\User\Contracts\Admin;
 
 class AuthenticateStaff
 {
@@ -58,7 +59,8 @@ class AuthenticateStaff
             ! $token
             || $token->expires_at?->isPast()
             || ! $token->can('staff')
-            || ! $token->tokenable?->status
+            || ! $token->tokenable instanceof Admin
+            || ! $token->tokenable->status
         ) {
             return null;
         }

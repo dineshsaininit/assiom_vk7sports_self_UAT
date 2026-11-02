@@ -72,6 +72,8 @@ class RazorpayGateway implements PaymentGateway
 
         if (
             $paymentId === ''
+            || $this->keySecret() === ''
+            || ! $payment->gateway_order_id
             || ($result['razorpay_order_id'] ?? null) !== $payment->gateway_order_id
             || ! hash_equals($expected, (string) ($result['razorpay_signature'] ?? ''))
         ) {

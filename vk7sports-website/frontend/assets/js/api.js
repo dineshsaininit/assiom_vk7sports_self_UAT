@@ -132,7 +132,7 @@
     return { accepted: 'Accepted', ordered: 'Ordered', completed: 'Ordered', rejected: 'Declined', expired: 'Expired' }[q.status] || q.status;
   }
   const quoteView = q => ({
-    id: q.id, number: q.quotation_number, status: quoteStatus(q), company: '', note: q.description || '', validUntil: q.expiration_date, createdAt: q.created_at, orderId: q.order_id, shortageAcknowledged: false,
+    id: q.id, number: q.quotation_number, status: quoteStatus(q), company: '', note: q.description || '', validUntil: q.expiration_date, createdAt: q.created_at, orderId: q.order_id, shortageAcknowledged: false, pieces: q.pieces != null ? q.pieces : (q.items || []).reduce((n, i) => n + (i.negotiated_qty || i.qty), 0),
     lines: (q.items || []).map(i => ({
       productId: String(i.product_id), name: i.name, style: i.sku, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.negotiated_qty || i.qty, unitPrice: i.price, listPrice: i.price,
       offerPrice: i.negotiated_price !== i.price ? i.negotiated_price : null, image: PLACEHOLDER
