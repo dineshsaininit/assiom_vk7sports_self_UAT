@@ -1,6 +1,6 @@
 /* Retailer pages: order list, checkout, quotes, orders, account. */
 (function () {
-  const { invoiceDoc, api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap, payOnline } = VK7;
+  const { amountTrail, invoiceDoc, api, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, pageHead, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap, payOnline } = VK7;
   const PAY = window.VK7_CONFIG.payment;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
@@ -53,7 +53,7 @@
     on(main, '[data-quote]', async () => {
       const c = await api.cart.get();
       modal('Request a quote', html`<form class="form" novalidate><p class="mb-0">We will review your ${c.pieces} pieces and send an offer, usually within one working day. Your order list will be moved to this quote.</p>
-        ${field('note', 'Message to sales (optional)', { type: 'textarea', rows: 3, placeholder: 'For example: target price or delivery date' })}
+        ${field('target', 'Your amount for all items, before GST (optional)', { type: 'number', min: 1, max: c.subtotal, placeholder: String(c.subtotal) })}
         ${c.shortages.length ? checkbox('acknowledgeShortage', 'I understand some sizes are short of stock and may take longer.') : ''}
         <button class="btn btn-red" type="submit">Send quote request</button></form>`, async v => {
           const r = await api.quotes.request(v);
@@ -104,13 +104,13 @@
           <div class="field" data-field="addressId"><div class="stack" style="gap:8px">${c.addresses.map(a => html`<label class="card card-pad check" style="align-items:flex-start;padding:12px"><input type="radio" name="addressId" value="${a.id}" ${a.id === def.id ? raw('checked') : ''}><span><strong>${a.label}</strong><br><span class="muted small">${a.line1}, ${a.city}, ${a.state} ${a.pin} · ${a.phone}</span></span></label>`)}</div><span class="err" hidden></span></div></div>
         <div class="card card-pad"><h3 class="mb">Order details</h3><div class="form">${field('poRef', 'Your reference (optional)', { hint: 'For example your purchase order number.' })}${field('notes', 'Delivery notes (optional)', { type: 'textarea', rows: 3 })}</div></div>
         <div class="card card-pad"><h3 class="mb">How you pay</h3>
-          ${c.advancePct != null ? html`<p>After placing the order you pay a <strong>${c.advancePct}% advance, about ${money(c.advanceDue)}</strong>, online or by UPI or bank transfer. Stock is held for ${c.holdHours} hours.</p>
+          ${c.advancePct != null ? html`<p>After placing the order you pay at least a <strong>${c.advancePct}% advance, about ${money(c.advanceDue)}</strong>, or up to the full amount, online or by UPI or bank transfer. Stock is held for ${c.holdHours} hours.</p>
           <p class="mb-0 muted">The rest is due after delivery. The exact amounts, including delivery charges, appear on your order page.</p>` : html`<p class="mb-0">No payment is taken on this website. VK7SPORTS will contact you to confirm payment terms for this order.</p>`}</div>
         <div class="card"><div class="card-head"><h3>Items (${c.pieces} pieces)</h3></div>${lineTable(c.lines)}</div>
       </div>
       <aside class="card card-pad sticky"><h3 class="mb">Summary</h3>
         <div class="sum"><div><span>Pieces</span><span>${c.pieces}</span></div><div><span>Order value, before GST</span><span>${money(c.subtotal)}</span></div>${c.advancePct != null ? html`<div><span>Balance on delivery</span><span>${money(c.balanceDue)}</span></div>
-          <div class="tot"><span>Advance due now</span><span>${money(c.advanceDue)}</span></div>` : html`<div class="tot"><span>Order value</span><span>${money(c.subtotal)}</span></div>`}</div>
+          <div class="tot"><span>Minimum due now</span><span>${money(c.advanceDue)}</span></div>` : html`<div class="tot"><span>Order value</span><span>${money(c.subtotal)}</span></div>`}</div>
         <div class="mt">${checkbox('agree', html`I accept the <a class="link" href="policy.html?doc=terms" target="_blank">terms of sale</a>.`)}</div>
         <button class="btn btn-red btn-block mt" type="submit" ${c.shortages.length ? raw('disabled') : ''}>Place order</button>
         <a class="btn btn-ghost btn-block mt" href="${quoteId ? 'account-quote.html?id=' + quoteId : 'cart.html'}">Go back</a>
@@ -191,14 +191,17 @@
     let form = '';
     if (pending) form = notice('info', 'Payment being verified', html`We have your reference <span class="mono">${pending.ref}</span> for ${money(pending.amount)}. Our finance team will confirm it soon.`);
     else if (canPayAdvance || canPayBalance) {
-      const kind = canPayAdvance ? 'advance' : 'balance', amount = canPayAdvance ? o.advanceDue : o.outstanding;
-      form = html`<div class="row mt"><button class="btn btn-red" type="button" data-pay="${kind}">Pay ${money(amount)} online</button></div><h4 class="mb" style="margin-top:20px">Paid by UPI or bank transfer? Enter your reference</h4>
-      <form class="form" id="payform" novalidate data-kind="${kind}"><div class="form-2">${field('method', 'Paid by', { type: 'select', required: true, options: ['UPI', 'Bank transfer'] })}${field('amount', 'Amount (₹)', { type: 'number', required: true, value: amount })}</div>${field('ref', 'Payment reference (UTR)', { required: true, placeholder: 'For example 412345678901', maxlength: 30 })}<button class="btn btn-red" type="submit">Submit reference</button></form>`;
+      const kind = canPayAdvance ? 'advance' : 'balance', min = o.minPayment != null ? o.minPayment : o.advanceDue;
+      const chooser = canPayAdvance ? html`<div class="pay-pick"><div class="field"><label for="payamt">Amount to pay (₹)</label><input class="input" id="payamt" type="number" min="${min}" max="${o.outstanding}" step="0.01" value="${min}"></div>
+        <div class="row"><button class="btn btn-line btn-sm" type="button" data-amt="${min}"><span>Minimum advance</span> ${money(min)}</button><button class="btn btn-line btn-sm" type="button" data-amt="${o.outstanding}"><span>Full payment</span> ${money(o.outstanding)}</button></div>
+        <p class="hint mb-0">You can pay any amount from the minimum advance up to the full amount.</p></div>` : '';
+      form = html`${chooser}<div class="row mt"><button class="btn btn-red" type="button" data-pay="${kind}">Pay online</button></div><h4 class="mb" style="margin-top:20px">Paid by UPI or bank transfer? Enter your reference</h4>
+      <form class="form" id="payform" novalidate data-kind="${kind}">${field('method', 'Paid by', { type: 'select', required: true, options: ['UPI', 'Bank transfer'] })}${field('ref', 'Payment reference (UTR)', { required: true, placeholder: 'For example 412345678901', maxlength: 30 })}<button class="btn btn-red" type="submit">Submit reference</button></form>`;
     }
     if (!pending && !canPayAdvance && !canPayBalance) return '';
     return html`<div class="card card-pad">
       <div class="row between mb"><h3>${canPayBalance ? 'Balance payment' : 'Payment'}</h3>${o.holdUntil && canPayAdvance ? html`<span class="badge b-warn">${VK7.hoursLeft(o.holdUntil)} hours left</span>` : ''}</div>
-      ${canPayAdvance || canPayBalance ? html`<p>Please pay <strong>${money(canPayAdvance ? o.advanceDue : o.outstanding)}</strong> using these details.</p>${details}` : ''}
+      ${canPayAdvance ? html`<p>Choose how much to pay, then pay online or enter your bank reference.</p>${details}` : canPayBalance ? html`<p>Please pay <strong>${money(o.outstanding)}</strong> using these details.</p>${details}` : ''}
       ${form}
       <p class="small muted mt mb-0">Never share your UPI PIN or OTP with anyone.</p></div>`;
   };
@@ -228,10 +231,12 @@
         <div class="row"><a class="btn btn-line" href="invoice.html?id=${o.id}">View invoice</a>${o.type === 'standard' ? html`<button class="btn btn-line" data-reorder>Order again</button>` : ''}${o.status === 'Awaiting advance' && !o.paid && o.type === 'standard' ? html`<button class="btn btn-danger" data-cancel>Cancel order</button>` : ''}<a class="btn btn-ghost" href="contact.html">Need help?</a></div>
       </div>`;
       const pf = main.querySelector('#payform');
-      if (pf) onSubmit(pf, async v => { await api.orders.submitPayment(id, { ...v, kind: pf.dataset.kind }); toast('Reference submitted'); await render(); });
+      if (pf) onSubmit(pf, async v => { await api.orders.submitPayment(id, { ...v, kind: pf.dataset.kind, amount: chosenAmount() }); toast('Reference submitted'); await render(); });
       if (o.tracking) mountMap(main, o.tracking);
     };
-    on(main, '[data-pay]', el => act(() => payOnline(id, el.dataset.pay, render)));
+    const chosenAmount = () => { const box = main.querySelector('#payamt'); return box ? box.value : null; };
+    on(main, '[data-amt]', el => { main.querySelector('#payamt').value = el.dataset.amt; });
+    on(main, '[data-pay]', el => act(() => payOnline(id, el.dataset.pay, render, chosenAmount())).catch(() => {}));
     on(main, '[data-reorder]', () => act(() => api.orders.reorder(id)).then(() => { location.href = 'cart.html'; }));
     on(main, '[data-cancel]', () => reasonBox('Cancel order', 'Held stock will be released.', 'Cancel order', async r => { await api.orders.cancel(id, r); toast('Order cancelled'); await render(); }));
     on(main, '[data-art]', el => {
@@ -261,31 +266,30 @@
     const id = param('id');
     const render = async () => {
       const q = await api.quotes.get(id);
-      const offered = q.lines.some(l => l.offerPrice != null);
-      const listTotal = q.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-      const offerTotal = q.lines.reduce((s, l) => s + l.qty * (l.offerPrice ?? l.unitPrice), 0);
+      const open = ['Quote requested', 'Quote ready'].includes(q.status);
+      const agreed = ['Accepted', 'Ordered'].includes(q.status);
       main.innerHTML = html`${title(q.number, 'Requested on ' + date(q.createdAt), badge(q.status))}
       <div class="stack">
-        ${param('new') ? notice('ok', 'Quote request sent', 'We will reply within one working day. You will see our offer here.') : ''}
-        ${q.status === 'Quote ready' ? html`<div class="card card-pad"><div class="row between"><div><h3>Your offer is ready</h3><p class="muted mb-0">Valid until ${date(q.validUntil)}. Accepting locks these prices.</p></div><div class="right"><div class="muted small" style="text-decoration:line-through">${money(listTotal)}</div><div class="price" style="font-size:22px">${money(offerTotal)}</div></div></div>
-          <div class="row mt"><button class="btn btn-red" data-accept>Accept offer</button><button class="btn btn-line" data-counter>Ask for changes</button><button class="btn btn-ghost" data-decline>Decline</button></div></div>` : ''}
-        ${q.status === 'Accepted' ? html`<div class="card card-pad row between"><div><h3>Offer accepted</h3><p class="muted mb-0">Your price is locked. Place the order to reserve stock.</p></div><a class="btn btn-red" href="checkout.html?quote=${q.id}">Place order</a></div>` : ''}
+        ${param('new') ? notice('ok', 'Quote request sent', 'We will reply within one working day. You will see our amount here.') : ''}
+        ${q.status === 'Quote ready' ? html`<div class="card card-pad"><div class="row between"><div><h3>Offer from VK7SPORTS</h3><p class="muted mb-0">Valid until ${date(q.validUntil)}. Accepting fixes this amount.</p></div><div class="right"><div class="muted small" style="text-decoration:line-through">${money(q.listTotal)}</div><div class="price" style="font-size:22px">${money(q.latestAmount)}</div></div></div>
+          <div class="row mt"><button class="btn btn-red" data-accept>Accept amount</button><button class="btn btn-ghost" data-decline>Decline</button></div></div>` : ''}
+        ${q.status === 'Quote requested' && q.latestFrom === 'retailer' ? notice('info', 'Waiting for VK7SPORTS', 'We have your amount and will reply soon.') : ''}
+        ${q.status === 'Accepted' ? html`<div class="card card-pad row between"><div><h3>Final amount agreed</h3><p class="muted mb-0">Place the order to reserve stock. This amount carries through to your payment.</p></div><div class="right"><div class="price" style="font-size:22px">${money(q.latestAmount)}</div><a class="btn btn-red mt" href="checkout.html?quote=${q.id}">Place order</a></div></div>` : ''}
         ${q.status === 'Ordered' ? notice('ok', 'Ordered', html`This quote became <a class="link" href="account-order.html?id=${q.orderId}">your order</a>.`) : ''}
         ${q.status === 'Expired' ? notice('bad', 'Quote expired', 'Please add the items to your order list and request a new quote.') : ''}
-        <div class="card"><div class="card-head"><h3>Items (${pcs(q.lines)} pieces)</h3></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Your price</th>${offered ? html`<th class="num">Our offer</th>` : ''}</tr></thead><tbody>
-          ${q.lines.map(l => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td>${offered ? html`<td class="num"><strong>${l.offerPrice == null ? '-' : money(l.offerPrice)}</strong></td>` : ''}</tr>`)}
+        <div class="card"><div class="card-head"><h3>Items (${pcs(q.lines)} pieces)</h3><span class="small muted"><span>List value, before GST</span> ${money(q.listTotal)}</span></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">List price</th></tr></thead><tbody>
+          ${q.lines.map(l => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td></tr>`)}
         </tbody></table></div></div>
-        <div class="card"><div class="card-head"><h3>Messages</h3></div><div class="card-pad stack">
-          ${q.messages.length ? q.messages.map(m => html`<div class="notice ${m.from === 'staff' ? 'n-info' : ''}" style="${m.from === 'staff' ? '' : 'background:var(--bg);border-color:var(--line)'}"><div><strong>${m.by}</strong><span class="small muted">${dateTime(m.at)}</span><div>${m.text}</div></div></div>`) : html`<p class="muted mb-0">No messages yet.</p>`}
-          ${['Quote requested', 'Quote ready'].includes(q.status) ? html`<form class="form" id="msg" novalidate>${field('text', 'Send a message', { type: 'textarea', rows: 2 })}<div><button class="btn btn-line" type="submit">Send</button></div></form>` : ''}
+        <div class="card"><div class="card-head"><h3>${agreed ? 'Final amount' : 'Amounts'}</h3></div><div class="card-pad stack">
+          ${amountTrail(q)}
+          ${open ? html`<form class="form" id="amt" novalidate>${field('amount', 'Your amount for all items, before GST (₹)', { type: 'number', required: true, min: 1, max: q.listTotal })}<div><button class="btn btn-line" type="submit">Send amount</button></div></form>` : ''}
         </div></div>
       </div>`;
-      const f = main.querySelector('#msg');
-      if (f) onSubmit(f, async v => { await api.quotes.message(id, v.text); await render(); });
+      const f = main.querySelector('#amt');
+      if (f) onSubmit(f, async v => { await api.quotes.counter(id, v.amount); toast('Amount sent'); await render(); });
     };
-    on(main, '[data-accept]', () => confirmBox('Accept offer', 'This locks the offered prices. You can then place the order.', 'Accept offer', async () => { await api.quotes.accept(id); await render(); }));
+    on(main, '[data-accept]', () => confirmBox('Accept amount', 'This fixes the amount. You can then place the order.', 'Accept amount', async () => { await api.quotes.accept(id); await render(); }));
     on(main, '[data-decline]', () => confirmBox('Decline offer', 'This closes the quote.', 'Decline', async () => { await api.quotes.decline(id); await render(); }, true));
-    on(main, '[data-counter]', () => modal('Ask for changes', html`<form class="form" novalidate>${field('text', 'What would you like changed?', { type: 'textarea', required: true })}<button class="btn btn-red" type="submit">Send</button></form>`, async v => { await api.quotes.message(id, v.text); await render(); }));
     await render();
   });
 

@@ -5,11 +5,12 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use VK7\Wholesale\Exceptions\BusinessRuleException;
 use VK7\Wholesale\Exceptions\MoqNotMetException;
+use VK7\Wholesale\Repositories\CustomerQuoteRepository;
 use Webkul\B2BSuite\Models\CustomerQuote;
 use Webkul\B2BSuite\Notifications\Notifier;
 use Webkul\B2BSuite\Repositories\CustomerQuoteMessageRepository;
-use Webkul\B2BSuite\Repositories\CustomerQuoteRepository;
 use Webkul\Checkout\Facades\Cart;
 use Webkul\User\Repositories\AdminRepository;
 
@@ -60,7 +61,7 @@ class QuoteController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:1000'],
+            'target_amount' => ['nullable', 'numeric', 'gt:0'],
         ]);
 
         $customer = $this->customer();
@@ -75,10 +76,19 @@ class QuoteController extends Controller
             return $this->fail(trans('The cart is empty.'), 'CART_EMPTY');
         }
 
+        $target = $data['target_amount'] ?? null;
+
+        if (
+            $target
+            && round((float) $target, 2) > round((float) Cart::getCart()->base_sub_total, 2)
+        ) {
+            return $this->fail(trans('Enter an amount up to the list value of this quote.'), 'INVALID_AMOUNT');
+        }
+
         $numbers = $this->customerQuoteRepository->generateQuotationNumber(null);
 
         try {
-            $quote = $this->customerQuoteRepository->create(array_merge($data, $numbers, [
+            $quote = $this->customerQuoteRepository->create(array_merge(['name' => $data['name']], $numbers, [
                 'status' => CustomerQuote::STATUS_OPEN,
                 'customer_id' => $customer->id,
                 'company_id' => $company->id,
@@ -88,6 +98,10 @@ class QuoteController extends Controller
             ]));
         } catch (MoqNotMetException $e) {
             return $this->fail($e->getMessage(), 'MOQ_NOT_MET');
+        }
+
+        if ($target) {
+            $this->customerQuoteRepository->offerAmount($quote->refresh(), (float) $target, 'customer', $customer->id);
         }
 
         Notifier::quote($quote, 'requested', 'admin');
@@ -108,17 +122,11 @@ class QuoteController extends Controller
     }
 
     /**
-     * Send a counter-offer on the quote's lines.
+     * Send the retailer's amount for the whole quote.
      */
     public function counter(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'message' => ['required', 'string', 'max:1000'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.discount_type' => ['nullable', 'in:percent,fixed'],
-            'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
-            'items.*.negotiated_qty' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validate(['amount' => ['required', 'numeric', 'gt:0']]);
 
         $quote = $this->find($id);
 
@@ -130,40 +138,15 @@ class QuoteController extends Controller
             return $this->fail(trans('This quote can no longer be changed.'), 'QUOTE_CLOSED');
         }
 
-        DB::transaction(function () use ($quote, $data, $id) {
-            $message = $quote->messages()->create($this->messageData($data['message']));
-
-            $this->customerQuoteRepository->createOrUpdateMessageQuotation([
-                'status' => CustomerQuote::STATUS_NEGOTIATION,
-                'message_id' => $message->id,
-                'message' => $data['message'],
-                'items' => $data['items'],
-            ], $id);
-        });
+        try {
+            $this->customerQuoteRepository->offerAmount($quote, (float) $data['amount'], 'customer', $this->customer()->id);
+        } catch (BusinessRuleException $e) {
+            return $this->fail($e->getMessage(), $e->errorCode, $e->status);
+        }
 
         Notifier::quote($quote->refresh(), 'countered', 'admin');
 
         return response()->json(['data' => $this->detail($quote)]);
-    }
-
-    /**
-     * Post a message on the quote.
-     */
-    public function message(Request $request, int $id): JsonResponse
-    {
-        $data = $request->validate(['message' => ['required', 'string', 'max:1000']]);
-
-        $quote = $this->find($id);
-
-        if (! $quote) {
-            return $this->notFound();
-        }
-
-        $quote->messages()->create($this->messageData($data['message']));
-
-        Notifier::quote($quote, 'message', 'admin');
-
-        return response()->json(['data' => $this->detail($quote->refresh())], 201);
     }
 
     /**
@@ -214,12 +197,10 @@ class QuoteController extends Controller
     }
 
     /**
-     * Reject a quote with a reason.
+     * Decline a quote.
      */
-    public function reject(Request $request, int $id): JsonResponse
+    public function reject(int $id): JsonResponse
     {
-        $data = $request->validate(['message' => ['required', 'string', 'max:1000']]);
-
         $quote = $this->find($id);
 
         if (! $quote) {
@@ -230,11 +211,7 @@ class QuoteController extends Controller
             return $this->fail(trans('This quote can no longer be changed.'), 'QUOTE_CLOSED');
         }
 
-        DB::transaction(function () use ($quote, $data) {
-            $quote->update(['status' => CustomerQuote::STATUS_REJECTED]);
-
-            $quote->messages()->create($this->messageData($data['message']));
-        });
+        $quote->update(['status' => CustomerQuote::STATUS_REJECTED]);
 
         Notifier::quote($quote, 'rejected', 'admin');
 
@@ -278,23 +255,12 @@ class QuoteController extends Controller
     }
 
     /**
-     * Attributes of a message from the signed-in retailer.
-     */
-    protected function messageData(string $message): array
-    {
-        return [
-            'message' => $message,
-            'user_type' => 'customer',
-            'user_id' => $this->customer()->id,
-            'created_at' => now(),
-        ];
-    }
-
-    /**
      * Shape a quote for listing screens.
      */
     protected function summary($quote): array
     {
+        $amounts = $this->customerQuoteRepository->amounts($quote);
+
         return [
             'id' => $quote->id,
             'quotation_number' => $quote->quotation_number,
@@ -305,6 +271,9 @@ class QuoteController extends Controller
             'total' => (float) $quote->base_total,
             'negotiated_total' => (float) $quote->base_negotiated_total,
             'pieces' => (int) $quote->items->sum('qty'),
+            'list_total' => $this->customerQuoteRepository->listTotal($quote),
+            'latest_amount' => $amounts ? end($amounts)['amount'] : null,
+            'latest_from' => $amounts ? end($amounts)['from'] : null,
             'expiration_date' => $quote->expiration_date,
             'order_id' => $quote->order_id,
             'created_at' => $quote->created_at,
@@ -317,7 +286,6 @@ class QuoteController extends Controller
     protected function detail($quote): array
     {
         return array_merge($this->summary($quote), [
-            'description' => $quote->description,
             'can_accept' => $quote->status === CustomerQuote::STATUS_NEGOTIATION
                 && (bool) $this->customerQuoteMessageRepository->getLastQuotationMessage($quote->id, 'admin'),
             'items' => $quote->items->map(fn ($item) => [
@@ -332,12 +300,7 @@ class QuoteController extends Controller
                 'negotiated_price' => (float) $item->base_negotiated_price,
                 'negotiated_total' => (float) $item->base_negotiated_total,
             ])->values(),
-            'messages' => $quote->messages->map(fn ($message) => [
-                'id' => $message->id,
-                'from' => $message->user_type,
-                'message' => $message->message,
-                'created_at' => $message->created_at,
-            ])->values(),
+            'amounts' => $this->customerQuoteRepository->amounts($quote),
         ]);
     }
 }

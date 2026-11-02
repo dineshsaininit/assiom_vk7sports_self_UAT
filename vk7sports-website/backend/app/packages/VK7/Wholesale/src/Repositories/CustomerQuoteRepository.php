@@ -4,15 +4,78 @@ namespace VK7\Wholesale\Repositories;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use VK7\Wholesale\Exceptions\BusinessRuleException;
 use VK7\Wholesale\Exceptions\MoqNotMetException;
 use VK7\Wholesale\Moq;
 use VK7\Wholesale\Sequence;
 use Webkul\B2BSuite\Contracts\CustomerQuote;
+use Webkul\B2BSuite\Models\CustomerQuote as CustomerQuoteModel;
 use Webkul\B2BSuite\Repositories\CustomerQuoteRepository as BaseCustomerQuoteRepository;
 use Webkul\Checkout\Facades\Cart;
 
 class CustomerQuoteRepository extends BaseCustomerQuoteRepository
 {
+    /**
+     * Record one side's amount for the whole quote, spreading it across the lines by their value.
+     */
+    public function offerAmount($quote, float $amount, string $userType, int $userId): void
+    {
+        $listTotal = $this->listTotal($quote);
+
+        $amount = round($amount, 2);
+
+        if (
+            $amount <= 0
+            || $amount > $listTotal
+        ) {
+            throw new BusinessRuleException(trans('Enter an amount up to the list value of this quote.'), 'INVALID_AMOUNT');
+        }
+
+        $text = 'Amount: '.number_format($amount, 2, '.', '');
+
+        DB::transaction(function () use ($quote, $amount, $userType, $userId, $listTotal, $text) {
+            $message = $quote->messages()->create([
+                'message' => $text,
+                'user_type' => $userType,
+                'user_id' => $userId,
+                'created_at' => now(),
+            ]);
+
+            $this->createOrUpdateMessageQuotation([
+                'status' => CustomerQuoteModel::STATUS_NEGOTIATION,
+                'message_id' => $message->id,
+                'message' => $text,
+                'items' => $quote->items->mapWithKeys(fn ($item) => [$item->id => ['negotiated_qty' => $item->qty]])->all(),
+                'total_discount_type' => 'fixed',
+                'total_discount_value' => $listTotal - $amount,
+            ], $quote->id);
+        });
+    }
+
+    /**
+     * The quote's value at list prices.
+     */
+    public function listTotal($quote): float
+    {
+        return round((float) $quote->items->sum(fn ($item) => (float) $item->base_price * (int) $item->qty), 2);
+    }
+
+    /**
+     * Every amount sent on a quote, oldest first.
+     */
+    public function amounts($quote): array
+    {
+        return $quote->messages()->with('quotations')->orderBy('id')->get()
+            ->filter(fn ($message) => $message->quotations->isNotEmpty())
+            ->map(fn ($message) => [
+                'from' => $message->user_type === 'admin' ? 'staff' : 'retailer',
+                'amount' => round((float) $message->quotations->sum('base_total'), 2),
+                'created_at' => $message->created_at,
+            ])
+            ->values()
+            ->all();
+    }
+
     /**
      * Seconds a cart stays locked while a quote is created from it.
      */

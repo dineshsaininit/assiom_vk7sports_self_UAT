@@ -137,7 +137,8 @@
       productId: String(i.product_id), name: i.name, style: i.sku, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.negotiated_qty || i.qty, unitPrice: i.price, listPrice: i.price,
       offerPrice: i.negotiated_price !== i.price ? i.negotiated_price : null, image: PLACEHOLDER
     })),
-    messages: (q.messages || []).map(m => ({ from: m.from === 'customer' ? 'retailer' : 'staff', by: m.from === 'customer' ? 'You' : 'VK7SPORTS', text: m.message, at: m.created_at }))
+    listTotal: q.list_total, latestAmount: q.latest_amount, latestFrom: q.latest_from,
+    amounts: (q.amounts || []).map(a => ({ from: a.from, by: a.from === 'staff' ? 'VK7SPORTS' : 'You', amount: a.amount, at: a.created_at }))
   });
   const allQuotes = async () => (await http('GET', '/quotes?limit=100')).data.map(quoteView);
 
@@ -153,7 +154,7 @@
     const reference = (o.comments || []).find(c => c.comment.startsWith('Retailer reference: '));
     return {
       id: o.id, number: o.order_number, type: 'standard', status, createdAt: o.created_at, subtotal: f.total, holdUntil: f.hold_until, advancePct: f.advance_percent, advanceDue: f.advance_due, balanceDue: f.balance_due,
-      paid: f.paid, outstanding: f.outstanding, payable: f.payable || null, gateway: f.gateway, payments: (f.payments || []).map(paymentView), tracking: o.tracking || null, artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
+      paid: f.paid, outstanding: f.outstanding, payable: f.payable || null, minPayment: f.min_payment, gateway: f.gateway, payments: (f.payments || []).map(paymentView), tracking: o.tracking || null, artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
       address: o.address || { label: '', line1: '', city: '', state: '', pin: '', phone: '' },
       shipment: shipment ? { courier: shipment.carrier || '', lr: shipment.track_number || '', date: shipment.created_at, url: '' } : null,
       lines: (o.items || []).map(i => ({ productId: String(i.product_id), variantId: i.variant_id, name: i.name, style: i.sku, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty_ordered, unitPrice: i.price, image: PLACEHOLDER }))
@@ -286,15 +287,15 @@
 
   api.quotes.list = allQuotes;
   api.quotes.get = async id => quoteView((await http('GET', '/quotes/' + id)).data);
-  api.quotes.request = async ({ note, acknowledgeShortage }) => {
+  api.quotes.request = async ({ target, acknowledgeShortage }) => {
     const c = await getCart();
     if (c.shortages.length && !acknowledgeShortage) throw new ApiError('Please confirm you have read the stock shortage note.', { code: 'shortage' });
-    const q = (await http('POST', '/quotes', { name: 'Order list, ' + c.pieces + ' pieces', description: (note || '').trim() || null })).data;
+    const q = (await http('POST', '/quotes', { name: 'Order list, ' + c.pieces + ' pieces', target_amount: Number(target) > 0 ? Number(target) : null })).data;
     return { id: q.id, number: q.quotation_number };
   };
-  api.quotes.message = async (id, text) => quoteView((await http('POST', '/quotes/' + id + '/messages', { message: text })).data);
+  api.quotes.counter = async (id, amount) => quoteView((await http('POST', '/quotes/' + id + '/counter', { amount: Number(amount) })).data);
   api.quotes.accept = async id => quoteView((await http('POST', '/quotes/' + id + '/accept')).data);
-  api.quotes.decline = async id => quoteView((await http('POST', '/quotes/' + id + '/reject', { message: 'Declined by retailer.' })).data);
+  api.quotes.decline = async id => quoteView((await http('POST', '/quotes/' + id + '/reject')).data);
 
   api.checkout.prepare = async quoteId => {
     const addresses = accountView((await http('GET', '/account')).data).addresses;
@@ -328,9 +329,9 @@
 
   api.orders.list = allOrders;
   api.orders.get = orderDetail;
-  api.orders.startPayment = async (id, kind) => (await http('POST', '/orders/' + id + '/payments', { kind })).data;
+  api.orders.startPayment = async (id, kind, amount) => (await http('POST', '/orders/' + id + '/payments', { kind, amount: amount ? Number(amount) : null })).data;
   api.orders.confirmPayment = async (id, paymentId, result) => (await http('POST', '/orders/' + id + '/payments/' + paymentId + '/confirm', result)).data;
-  api.orders.submitPayment = async (id, { kind, method, ref }) => (await http('POST', '/orders/' + id + '/payments/reference', { kind, method, reference: ref }, { reference: 'ref' })).data;
+  api.orders.submitPayment = async (id, { kind, method, ref, amount }) => (await http('POST', '/orders/' + id + '/payments/reference', { kind, method, reference: ref, amount: amount ? Number(amount) : null }, { reference: 'ref' })).data;
   const invoiceView = i => ({ ...i, lines: i.lines.map(l => ({ ...l, colour: option(l, 'color'), size: option(l, 'size') })) });
   api.orders.invoice = async id => invoiceView((await http('GET', '/orders/' + id + '/invoice')).data);
   api.orders.cancel = async (id, reason) => orderView((await http('POST', '/orders/' + id + '/cancel', { reason })).data);
@@ -347,7 +348,7 @@
   const enquiryBody = (v, type) => ({
     type, name: v.name, business_name: v.organisation || null, email: v.email || null, phone: v.phone, city: v.city || null, quantity: firstNumber(v.quantity),
     product_id: /^\d+$/.test(v.styleId || '') ? Number(v.styleId) : null,
-    message: [v.orgType && 'Type: ' + v.orgType, v.quantity && 'Quantity: ' + v.quantity, v.requiredBy && 'Required by: ' + v.requiredBy, v.artworkName && 'Artwork file named: ' + v.artworkName + ' (not uploaded)', v.message].filter(Boolean).join('\n')
+    message: [v.orgType && 'Type: ' + v.orgType, v.quantity && 'Quantity: ' + v.quantity, v.requiredBy && 'Required by: ' + v.requiredBy, v.artworkName && 'Artwork file named: ' + v.artworkName + ' (not uploaded)', v.design, v.message].filter(Boolean).join('\n')
   });
   api.enquiries.create = async v => ({ number: (await http('POST', '/enquiries', enquiryBody(v, v.type === 'custom' ? 'custom' : 'bulk'))).data.number });
   api.enquiries.contact = async v => ({ number: (await http('POST', '/enquiries', enquiryBody(v, 'contact'))).data.number });
@@ -386,9 +387,10 @@
 
   const QUOTE = { open: 'Quote requested', draft: 'Quote requested', negotiation: 'Quote ready', accepted: 'Accepted', ordered: 'Ordered', completed: 'Ordered', rejected: 'Declined', expired: 'Expired' };
   const deskQuote = q => ({
-    id: q.id, number: q.number, status: QUOTE[q.status] || q.status, company: q.company, note: q.description || '', createdAt: q.created_at, validUntil: q.expiration_date,
+    id: q.id, number: q.number, status: q.status === 'negotiation' && q.latest_from === 'retailer' ? 'Quote requested' : QUOTE[q.status] || q.status, company: q.company, note: q.description || '', createdAt: q.created_at, validUntil: q.expiration_date,
     lines: q.items.map(i => ({ id: i.id, name: i.name, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty, unitPrice: i.price, offerPrice: i.negotiated_price !== i.price ? i.negotiated_price : null })),
-    messages: (q.messages || []).map(m => ({ by: m.from === 'staff' ? 'VK7SPORTS' : q.company, text: m.message, at: m.created_at }))
+    listTotal: q.list_total, latestAmount: q.latest_amount, latestFrom: q.latest_from, pieces: q.items.reduce((n, i) => n + i.qty, 0),
+    amounts: (q.amounts || []).map(a => ({ from: a.from, by: a.from === 'staff' ? 'VK7SPORTS' : q.company, amount: a.amount, at: a.created_at }))
   });
   const ENQUIRY = { new: 'New', contacted: 'In follow-up', converted: 'Won', closed: 'Closed' };
   const deskEnquiry = e => ({ id: e.id, number: e.number, type: e.type, name: e.name, organisation: e.business_name || '-', orgType: e.type, phone: e.phone, email: e.email, city: e.city || '-', message: e.message, quantity: e.quantity || '-', status: ENQUIRY[e.status] || e.status, notes: e.notes, followUp: e.follow_up_on, createdAt: e.created_at });
@@ -448,8 +450,9 @@
 
     quotes: async () => (await http('GET', '/admin/quotes')).data.map(deskQuote),
     quote: async id => deskQuote((await http('GET', '/admin/quotes/' + id)).data),
-    sendOffer: async (id, { prices, message }) => { await http('POST', '/admin/quotes/' + id + '/offer', { prices, message: message || null }); },
-    rejectQuote: async (id, reason) => { await http('POST', '/admin/quotes/' + id + '/reject', { reason }); },
+    sendOffer: async (id, amount) => { await http('POST', '/admin/quotes/' + id + '/offer', { amount: Number(amount) }); },
+    acceptQuote: async (id, amount) => { await http('POST', '/admin/quotes/' + id + '/accept', { amount: Number(amount) }); },
+    rejectQuote: async id => { await http('POST', '/admin/quotes/' + id + '/reject'); },
 
     enquiries: async () => (await http('GET', '/admin/enquiries')).data.map(deskEnquiry),
     updateEnquiry: async (id, { status, note, followUp }) => { await http('PUT', '/admin/enquiries/' + id, { status: Object.keys(ENQUIRY).find(k => ENQUIRY[k] === status), note: note || null, follow_up_on: followUp ? followUp.slice(0, 10) : null }); },

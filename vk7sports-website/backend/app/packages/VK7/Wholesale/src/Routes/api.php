@@ -74,6 +74,8 @@ Route::group([
 
                 Route::post('quotes/{id}/offer', 'sendOffer')->name('quotes.offer');
 
+                Route::post('quotes/{id}/accept', 'acceptQuote')->name('quotes.accept');
+
                 Route::post('quotes/{id}/reject', 'rejectQuote')->name('quotes.reject');
             });
 
@@ -238,8 +240,6 @@ Route::group([
             Route::get('{id}', 'show')->name('show');
 
             Route::post('{id}/counter', 'counter')->name('counter');
-
-            Route::post('{id}/messages', 'message')->name('message');
 
             Route::post('{id}/accept', 'accept')->name('accept');
 

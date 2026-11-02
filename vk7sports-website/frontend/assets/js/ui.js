@@ -237,9 +237,12 @@
     } catch (e) { fail(); }
   };
 
+  /* The amounts each side has sent on a quote, oldest first. */
+  const amountTrail = q => q.amounts.length ? html`<ol class="amt-trail">${q.amounts.map(a => html`<li class="is-${a.from}"><span>${a.by}</span><strong>${money(a.amount)}</strong><span class="small muted">${dateTime(a.at)}</span></li>`)}</ol>` : html`<p class="muted mb-0">No amounts sent yet.</p>`;
+
   /* Opens the payment screen for what the server says is due. The result counts only after the server verifies it. */
-  const payOnline = async (orderId, kind, done) => {
-    const s = await api.orders.startPayment(orderId, kind);
+  const payOnline = async (orderId, kind, done, amount) => {
+    const s = await api.orders.startPayment(orderId, kind, amount);
     const finish = async result => {
       await api.orders.confirmPayment(orderId, s.payment_id, result);
       toast('Payment received. Thank you.');
@@ -530,5 +533,5 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 
-  Object.assign(VK7, { invoiceDoc, trackingPanel, mountMap, payOnline, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
+  Object.assign(VK7, { amountTrail, invoiceDoc, trackingPanel, mountMap, payOnline, html, raw, money, date, dateTime, param, hoursLeft, icon, badge, tbc, notice, empty, skeleton, cardSkeleton, crumbs, pageHead, productCard, priceBlock, tracker, timeline, gridMarkup, bindGrid, field, checkbox, values, onSubmit, showFormError, toast, modal, confirmBox, reasonBox, on, act, page, redirect });
 })();

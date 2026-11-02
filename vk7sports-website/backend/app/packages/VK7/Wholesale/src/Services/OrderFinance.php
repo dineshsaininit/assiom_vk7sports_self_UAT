@@ -74,6 +74,7 @@ class OrderFinance
             'outstanding' => $closed ? 0.0 : round($term->total - $paid, 2),
             'hold_until' => $term->stage === 'Awaiting advance' ? $term->hold_until : null,
             'payable' => $this->payableKind($term, $payments, $paid),
+            'min_payment' => $term->advance_due,
             'gateway' => $this->gateway->code(),
             'payments' => $payments->where('status', '!=', 'created')->map(fn ($payment) => $this->payment($payment))->values(),
         ];
@@ -100,9 +101,9 @@ class OrderFinance
     /**
      * Open an online payment for the amount the server works out.
      */
-    public function startOnline($order, string $kind): array
+    public function startOnline($order, string $kind, ?float $requested = null): array
     {
-        $amount = $this->amountDue($order, $kind);
+        $amount = $this->amountDue($order, $kind, $requested);
 
         $payment = Payment::where('order_id', $order->id)
             ->where('kind', $kind)
@@ -187,9 +188,9 @@ class OrderFinance
     /**
      * Record a UPI or bank reference for finance to check against the statement.
      */
-    public function submitReference($order, string $kind, string $method, string $reference): void
+    public function submitReference($order, string $kind, string $method, string $reference, ?float $requested = null): void
     {
-        $amount = $this->amountDue($order, $kind);
+        $amount = $this->amountDue($order, $kind, $requested);
 
         if (Payment::where('reference', $reference)->whereIn('status', ['submitted', 'verified'])->exists()) {
             throw new BusinessRuleException(trans('This reference has already been used.'), 'DUPLICATE_REFERENCE');
@@ -374,9 +375,10 @@ class OrderFinance
     }
 
     /**
-     * Work out what is due now, refusing payment at the wrong moment.
+     * Work out what to collect now. The first payment may be anything from the minimum advance
+     * up to the full amount; the balance is always what is left.
      */
-    protected function amountDue($order, string $kind): float
+    protected function amountDue($order, string $kind, ?float $requested = null): float
     {
         $summary = $this->summary($order);
 
@@ -384,7 +386,20 @@ class OrderFinance
             throw new BusinessRuleException(trans('This payment is not due now.'), 'NOT_PAYABLE');
         }
 
-        return $kind === 'advance' ? $summary['advance_due'] : $summary['outstanding'];
+        if ($kind === 'balance') {
+            return $summary['outstanding'];
+        }
+
+        $amount = round($requested ?? (float) $summary['advance_due'], 2);
+
+        if (
+            $amount < (float) $summary['advance_due']
+            || $amount > (float) $summary['outstanding']
+        ) {
+            throw new BusinessRuleException(trans('Enter an amount from the minimum advance up to the full amount.'), 'INVALID_AMOUNT');
+        }
+
+        return $amount;
     }
 
     /**

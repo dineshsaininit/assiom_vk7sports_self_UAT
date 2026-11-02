@@ -24,10 +24,13 @@ class PaymentController extends Controller
      */
     public function start(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['kind' => ['required', Rule::in(['advance', 'balance'])]]);
+        $data = $request->validate([
+            'kind' => ['required', Rule::in(['advance', 'balance'])],
+            'amount' => ['nullable', 'numeric', 'gt:0'],
+        ]);
 
         return $this->guarded(fn () => response()->json([
-            'data' => $this->finance->startOnline($this->ownOrder($id), $data['kind']),
+            'data' => $this->finance->startOnline($this->ownOrder($id), $data['kind'], isset($data['amount']) ? (float) $data['amount'] : null),
         ], 201));
     }
 
@@ -59,12 +62,13 @@ class PaymentController extends Controller
             'kind' => ['required', Rule::in(['advance', 'balance'])],
             'method' => ['required', Rule::in(['UPI', 'Bank transfer'])],
             'reference' => ['required', 'string', 'regex:/^[A-Za-z0-9-]{6,30}$/'],
+            'amount' => ['nullable', 'numeric', 'gt:0'],
         ]);
 
         return $this->guarded(function () use ($id, $data) {
             $order = $this->ownOrder($id);
 
-            $this->finance->submitReference($order, $data['kind'], $data['method'], $data['reference']);
+            $this->finance->submitReference($order, $data['kind'], $data['method'], $data['reference'], isset($data['amount']) ? (float) $data['amount'] : null);
 
             return response()->json(['data' => $this->finance->summary($order)], 201);
         });

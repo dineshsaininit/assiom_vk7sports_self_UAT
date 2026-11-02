@@ -4,17 +4,16 @@ namespace VK7\Wholesale\Http\Controllers\Api\Admin;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use VK7\Wholesale\Exceptions\BusinessRuleException;
 use VK7\Wholesale\Http\Controllers\Api\Controller;
 use VK7\Wholesale\Models\Enquiry;
+use VK7\Wholesale\Repositories\CustomerQuoteRepository;
 use VK7\Wholesale\Services\ActivityRecorder;
 use VK7\Wholesale\Services\CatalogueDesk;
 use VK7\Wholesale\Services\InvoiceDesk;
 use VK7\Wholesale\Services\StoreSettings;
 use Webkul\B2BSuite\Models\CustomerQuote;
-use Webkul\B2BSuite\Repositories\CustomerQuoteRepository;
 use Webkul\Sales\Repositories\OrderRepository;
 use Webkul\User\Models\AdminProxy;
 use Webkul\User\Models\RoleProxy;
@@ -173,25 +172,16 @@ class AdminDeskController extends Controller
         }
 
         return response()->json(['data' => array_merge($this->quote($quote), [
-            'description' => $quote->description,
-            'messages' => $quote->messages()->orderBy('id')->get()->map(fn ($message) => [
-                'from' => $message->user_type === 'admin' ? 'staff' : 'retailer',
-                'message' => $message->message,
-                'created_at' => $message->created_at,
-            ])->values(),
+            'amounts' => $this->quotes->amounts($quote),
         ])]);
     }
 
     /**
-     * Send negotiated prices back to the retailer.
+     * Send staff's amount for the whole quote to the retailer.
      */
     public function sendOffer(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'prices' => ['required', 'array', 'min:1'],
-            'prices.*' => ['required', 'numeric', 'gt:0'],
-            'message' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $data = $request->validate(['amount' => ['required', 'numeric', 'gt:0']]);
 
         $quote = CustomerQuote::find($id);
 
@@ -202,35 +192,55 @@ class AdminDeskController extends Controller
             return $this->fail(trans('This quote can no longer be changed.'), 'QUOTE_CLOSED');
         }
 
-        $text = $data['message'] ?: 'Our offer is ready for you.';
+        return $this->guarded(function () use ($quote, $data, $request, $id) {
+            $this->quotes->offerAmount($quote, (float) $data['amount'], 'admin', $request->attributes->get('staff')->id);
 
-        DB::transaction(function () use ($quote, $data, $text, $request) {
-            $message = $quote->messages()->create($this->staffMessage($request, $text));
+            $this->activity->record($this->staffName($request), 'Sent quote offer', $quote->quotation_number, (string) $data['amount']);
 
-            $this->quotes->createOrUpdateMessageQuotation([
-                'status' => CustomerQuote::STATUS_NEGOTIATION,
-                'message_id' => $message->id,
-                'message' => $text,
-                'items' => $quote->items->mapWithKeys(fn ($item) => [$item->id => [
-                    'discount_type' => 'fixed',
-                    'discount_value' => max(0, (float) $item->price - (float) ($data['prices'][$item->id] ?? $item->price)),
-                    'negotiated_qty' => $item->qty,
-                ]])->all(),
-            ], $quote->id);
+            return $this->quoteDetail($id);
         });
+    }
 
-        $this->activity->record($this->staffName($request), 'Sent quote offer', $quote->quotation_number);
+    /**
+     * Accept the retailer's latest amount, which becomes the final price of the quote.
+     */
+    public function acceptQuote(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['amount' => ['required', 'numeric', 'gt:0']]);
+
+        $quote = CustomerQuote::find($id);
+
+        if (
+            ! $quote
+            || $quote->status !== CustomerQuote::STATUS_NEGOTIATION
+        ) {
+            return $this->fail(trans('This quote can no longer be changed.'), 'QUOTE_CLOSED');
+        }
+
+        $amounts = $this->quotes->amounts($quote);
+
+        $latest = $amounts ? end($amounts) : null;
+
+        if (
+            ! $latest
+            || $latest['from'] !== 'retailer'
+            || abs($latest['amount'] - (float) $data['amount']) >= 0.01
+        ) {
+            return $this->fail(trans('The retailer\'s amount has changed. Please check it again.'), 'AMOUNT_CHANGED');
+        }
+
+        $quote->update(['status' => CustomerQuote::STATUS_ACCEPTED]);
+
+        $this->activity->record($this->staffName($request), 'Accepted quote amount', $quote->quotation_number, (string) $data['amount']);
 
         return $this->quoteDetail($id);
     }
 
     /**
-     * Decline a quote with a reason.
+     * Decline a quote.
      */
     public function rejectQuote(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
-
         $quote = CustomerQuote::find($id);
 
         if (
@@ -240,13 +250,9 @@ class AdminDeskController extends Controller
             return $this->fail(trans('This quote can no longer be changed.'), 'QUOTE_CLOSED');
         }
 
-        DB::transaction(function () use ($quote, $data, $request) {
-            $quote->messages()->create($this->staffMessage($request, $data['reason']));
+        $quote->update(['status' => CustomerQuote::STATUS_REJECTED]);
 
-            $quote->update(['status' => CustomerQuote::STATUS_REJECTED]);
-        });
-
-        $this->activity->record($this->staffName($request), 'Rejected quote', $quote->quotation_number, $data['reason']);
+        $this->activity->record($this->staffName($request), 'Rejected quote', $quote->quotation_number);
 
         return $this->quoteDetail($id);
     }
@@ -475,12 +481,17 @@ class AdminDeskController extends Controller
      */
     protected function quote($quote): array
     {
+        $amounts = $this->quotes->amounts($quote);
+
         return [
             'id' => $quote->id,
             'number' => $quote->quotation_number,
             'status' => $quote->status,
             'company' => $quote->customer?->businessName() ?: $quote->customer?->name,
             'name' => $quote->name,
+            'list_total' => $this->quotes->listTotal($quote),
+            'latest_amount' => $amounts ? end($amounts)['amount'] : null,
+            'latest_from' => $amounts ? end($amounts)['from'] : null,
             'created_at' => $quote->created_at,
             'expiration_date' => $quote->expiration_date,
             'items' => $quote->items->map(fn ($item) => [
@@ -515,19 +526,6 @@ class AdminDeskController extends Controller
             'notes' => $enquiry->notes ?? [],
             'follow_up_on' => $enquiry->follow_up_on?->toDateString(),
             'created_at' => $enquiry->created_at,
-        ];
-    }
-
-    /**
-     * Build a staff message for a quote.
-     */
-    protected function staffMessage(Request $request, string $text): array
-    {
-        return [
-            'message' => $text,
-            'user_type' => 'admin',
-            'user_id' => $request->attributes->get('staff')->id,
-            'created_at' => now(),
         ];
     }
 

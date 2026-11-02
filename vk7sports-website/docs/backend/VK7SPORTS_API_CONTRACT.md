@@ -37,7 +37,7 @@ Validation errors return 422 with `{ "message": "...", "errors": { "field": ["..
 | Account | `GET /auth/me` |
 | Cart | `GET /cart`, `PUT` and `DELETE /cart/items/{id}` |
 | Request a quote | `POST /quotes` |
-| Quote list and detail | `GET /quotes`, `GET /quotes/{id}`, then `/counter`, `/messages`, `/accept`, `/reject` |
+| Quote list and detail | `GET /quotes`, `GET /quotes/{id}`, then `/counter`, `/accept`, `/reject` |
 | Checkout | `POST /checkout/address`, `/shipping`, `/payment`, `/order` |
 | Orders and tracking | `GET /orders`, `GET /orders/{id}` |
 | Enquiry / contact / custom order | `POST /enquiries` |
@@ -185,7 +185,7 @@ When `error` is set (`{ error_code, message }`), show it and disable checkout. A
 
 ### Quotes
 
-`POST /quotes` with `{ name, description? }` turns the **whole current cart** into a quote and **empties the cart**. It returns 201, or `MOQ_NOT_MET`, `CART_EMPTY` or `NO_COMPANY`.
+`POST /quotes` with `{ name, target_amount? }` turns the **whole current cart** into a quote and **empties the cart**. It returns 201, or `MOQ_NOT_MET`, `CART_EMPTY` or `NO_COMPANY`.
 
 Quote object:
 
@@ -204,10 +204,9 @@ Status flow: `open` → `negotiation` → `accepted` → `ordered` → `complete
 |---|---|---|
 | `GET /quotes` | `?limit=&page=` | Your company's quotes; items and messages are left out |
 | `GET /quotes/{id}` | | |
-| `POST /quotes/{id}/counter` | `{ message, items: { "<item id>": { discount_type: "percent" or "fixed", discount_value, negotiated_qty } } }` | Asks for a price. `QUOTE_CLOSED` if finished |
-| `POST /quotes/{id}/messages` | `{ message }` | |
+| `POST /quotes/{id}/counter` | `{ amount }` | Sends the retailer's amount for the whole quote, before GST, up to the list value. `INVALID_AMOUNT`, `QUOTE_CLOSED` |
 | `POST /quotes/{id}/accept` | | Show the button when `can_accept` is true. `NO_OFFER`, `QUOTE_EXPIRED` |
-| `POST /quotes/{id}/reject` | `{ message }` | `QUOTE_CLOSED` if finished |
+| `POST /quotes/{id}/reject` | | `QUOTE_CLOSED` if finished |
 
 After accepting, the lines are in the cart at the negotiated price and are locked (`locked_by_quote: true`). Send the retailer to checkout. Removing a locked line is allowed. Changing its quantity is not.
 
@@ -237,9 +236,9 @@ Each order has a `finance` block. The server works out every amount; the browser
 
 | Call | Body | Notes |
 |---|---|---|
-| `POST /orders/{id}/payments` | `{ kind }` | Returns `{ payment_id, gateway, amount, options }`. `NOT_PAYABLE` if that payment is not due. |
+| `POST /orders/{id}/payments` | `{ kind, amount? }` | For `advance`, `amount` may be anything from `min_payment` up to the full amount; it defaults to the minimum. Returns `{ payment_id, gateway, amount, options }`. `INVALID_AMOUNT`, or `NOT_PAYABLE` if that payment is not due. |
 | `POST /orders/{id}/payments/{paymentId}/confirm` | Razorpay's three result fields, or `{ simulated_result }` for the demo gateway | `PAYMENT_NOT_VERIFIED`, `PAYMENT_FAILED` |
-| `POST /orders/{id}/payments/reference` | `{ kind, method, reference }` | `method` is `UPI` or `Bank transfer`. Finance verifies it. `DUPLICATE_REFERENCE` if already used. |
+| `POST /orders/{id}/payments/reference` | `{ kind, method, reference, amount? }` | `method` is `UPI` or `Bank transfer`. Finance verifies it. `DUPLICATE_REFERENCE` if already used. |
 | `POST /webhooks/razorpay` | Razorpay's signed body | No token. Checked with `RAZORPAY_WEBHOOK_SECRET`. Safe to receive twice. |
 
 An order with no advance by `hold_until` expires and its stock is released (`php artisan vk7:expire-holds`, scheduled hourly, and also run when orders are listed).
@@ -285,7 +284,7 @@ Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). 
 | `audit` | `GET /admin/activity` |
 | `products` | `GET`, `POST /admin/categories`, `GET`, `POST /admin/products`, `GET`, `PUT /admin/products/{id}`, `POST /admin/products/{id}/photos` (multipart: `colour`, `photos[]`), `DELETE /admin/products/{id}/photos/{imageId}` |
 | `inventory` | `GET /admin/inventory`, `POST /admin/inventory/adjust` `{ variant_id, change, reason, note }`, `GET /admin/stock-log` |
-| `quotes` | `GET /admin/quotes`, `GET /admin/quotes/{id}`, `POST /admin/quotes/{id}/offer` `{ prices: { itemId: price }, message }`, `POST /admin/quotes/{id}/reject` `{ reason }` |
+| `quotes` | `GET /admin/quotes`, `GET /admin/quotes/{id}`, `POST /admin/quotes/{id}/offer` `{ amount }`, `POST /admin/quotes/{id}/accept` `{ amount }` (accepts the retailer's latest amount; `AMOUNT_CHANGED` if it no longer matches), `POST /admin/quotes/{id}/reject` |
 | `enquiries` | `GET /admin/enquiries`, `PUT /admin/enquiries/{id}` `{ status, note, follow_up_on }` |
 | `staff` | `GET`, `POST /admin/staff`, `PUT /admin/staff/{id}`, `POST /admin/staff/{id}/toggle` |
 | `settings` | `GET`, `PUT /admin/settings`: business rules, company details, bank details |

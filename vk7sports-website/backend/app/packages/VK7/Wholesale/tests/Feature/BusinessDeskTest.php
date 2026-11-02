@@ -581,13 +581,11 @@ it('does not let a retailer accept their own lower counter-offer', function () {
     $quote = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated()->json('data');
 
     asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/offer", [
-        'prices' => collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => $item['price'] - 10])->all(),
-        'message' => 'Staff offer',
+        'amount' => $quote['list_total'] - 240,
     ])->assertOk();
 
     asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/counter", [
-        'message' => 'One rupee please',
-        'items' => collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => ['discount_type' => 'percent', 'discount_value' => 99]])->all(),
+        'amount' => 24,
     ])->assertOk();
 
     asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/accept")
@@ -603,4 +601,124 @@ it('shows piece counts on the quote list', function () {
     asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated();
 
     asRetailer($retailer, 'GET', '/api/v1/quotes')->assertOk()->assertJsonPath('data.0.pieces', 24);
+});
+
+// ====================================================================
+// Quote Amounts And Flexible Payment
+// ====================================================================
+
+it('lets staff accept the retailer amount and carries it to the order total', function () {
+    $token = staffToken();
+
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $quote = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated()->json('data');
+
+    $amount = round($quote['list_total'] * 0.9, 2);
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/counter", ['amount' => $amount])->assertOk();
+
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/accept", ['amount' => $amount + 100])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'AMOUNT_CHANGED');
+
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/accept", ['amount' => $amount])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'accepted');
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/accept")->assertOk();
+
+    $orderId = checkout($retailer)->assertCreated()->json('data.id');
+
+    expect((float) Order::find($orderId)->base_sub_total)->toEqualWithDelta($amount, 0.05);
+});
+
+it('does not let staff accept their own amount or anyone send more than the list value', function () {
+    $token = staffToken();
+
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $quote = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'TEST quote'])->assertCreated()->json('data');
+
+    $amount = $quote['list_total'] - 100;
+
+    asRetailer($retailer, 'POST', "/api/v1/quotes/{$quote['id']}/counter", ['amount' => $quote['list_total'] + 1])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'INVALID_AMOUNT');
+
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/offer", ['amount' => $amount])->assertOk();
+
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quote['id']}/accept", ['amount' => $amount])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'AMOUNT_CHANGED');
+});
+
+it('accepts any first payment from the minimum advance up to the full amount', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    $finance = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance');
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance', 'amount' => $finance['min_payment'] - 1])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'INVALID_AMOUNT');
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance', 'amount' => $finance['total'] + 1])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'INVALID_AMOUNT');
+
+    $half = round($finance['total'] / 2, 2);
+
+    $start = asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance', 'amount' => $half])->assertCreated();
+
+    expect((float) $start->json('data.amount'))->toEqual($half);
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/{$start->json('data.payment_id')}/confirm", ['simulated_result' => 'success'])->assertOk();
+
+    expect(OrderTerm::where('order_id', $orderId)->value('stage'))->toBe('Confirmed');
+
+    $after = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance');
+
+    expect((float) $after['outstanding'])->toEqualWithDelta($finance['total'] - $half, 0.01);
+});
+
+it('closes an order paid in full up front as soon as it is delivered', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    $staff = staffToken();
+
+    $total = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance.total');
+
+    $start = asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'advance', 'amount' => $total])->assertCreated();
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/{$start->json('data.payment_id')}/confirm", ['simulated_result' => 'success'])->assertOk();
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/stage", ['stage' => 'Packing'])->assertOk();
+
+    $order = asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertOk()->json('data');
+
+    foreach (range(1, 12) as $scan) {
+        $order = asStaff($staff, 'POST', "/api/v1/admin/shipments/{$order['tracking']['id']}/refresh")->assertOk()->json('data');
+    }
+
+    expect($order['stage'])->toBe('Paid in full')
+        ->and((float) $order['outstanding'])->toEqual(0.0);
+});
+
+it('stores a bank reference for the amount the retailer chose', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    $finance = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance');
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/reference", [
+        'kind' => 'advance',
+        'method' => 'UPI',
+        'reference' => 'UPI99887766',
+        'amount' => $finance['total'],
+    ])->assertCreated();
+
+    expect((float) Payment::where('order_id', $orderId)->value('amount'))->toEqual((float) $finance['total']);
 });

@@ -315,10 +315,76 @@
   const enquiryDone = (el, r, what) => {
     el.innerHTML = html`<div class="center" style="padding:20px 0"><div class="state-ico" style="background:var(--ok-bg);color:var(--ok)">${icon('check', 24)}</div><h2>Thank you</h2><p class="muted">We have received your ${what}.</p><p class="mono" style="font-size:18px;font-weight:700">${r.number}</p><p class="muted">Please keep this reference. Our sales team will contact you within one working day.</p><a class="btn btn-navy" href="catalogue.html">Browse the catalogue</a></div>`;
   };
+  /* Pick a style from the catalogue and preview a name, number and logo on it. A guide only; staff send a proof. */
+  const TEXT_COLOURS = [['White', '#FFFFFF'], ['Black', '#111111'], ['Red', '#E31B23'], ['Navy', '#0A1121'], ['Yellow', '#F5C518']];
+  const studioMarkup = list => list.length ? html`<section class="card studio" aria-label="Design preview">
+    <div class="card-head"><div><h2 style="font-size:20px">Choose a style and see your design</h2><span class="small muted">Pick from the catalogue, then add your team name, number and logo.</span></div></div>
+    <div class="studio-grid">
+      <div class="studio-styles">${list.map(p => html`<button class="studio-style" type="button" data-style="${p.id}"><img src="${p.colours[0].images[0]}" alt="" loading="lazy"><span>${p.name}</span></button>`)}</div>
+      <div class="studio-stage"><img data-st-img alt="Preview of your design"><img class="st-logo" data-st-logo alt="Your logo" hidden><span class="st-name" data-st-name></span><span class="st-num" data-st-num></span></div>
+      <div class="studio-opts stack">
+        <div><div class="st-label">Colour</div><div class="swatches" data-st-colours></div></div>
+        <div class="field"><label for="st-team">Team or name on the shirt</label><input class="input" id="st-team" maxlength="20" placeholder="YOUR TEAM" data-st-team></div>
+        <div class="field"><label for="st-no">Number</label><input class="input" id="st-no" maxlength="3" inputmode="numeric" placeholder="7" data-st-no></div>
+        <div><div class="st-label">Text colour</div><div class="swatches">${TEXT_COLOURS.map(c => html`<button class="swatch" type="button" data-st-text="${c[1]}" data-st-text-name="${c[0]}" aria-label="${c[0]}" title="${c[0]}" style="background:${c[1]}"></button>`)}</div></div>
+        <div class="field"><label for="st-y">Move design up or down</label><input id="st-y" type="range" min="-28" max="28" value="0" data-st-y style="width:100%"></div>
+        <div class="field"><label for="st-logo">Your logo (preview only)</label><input class="input" id="st-logo" type="file" accept="image/png,image/jpeg,image/webp" data-st-file></div>
+      </div>
+    </div>
+    <p class="small muted" style="padding:0 20px 16px;margin:0">This preview is a guide. We send a proof for your approval before production.</p>
+  </section>` : '';
+  const mountStudio = (root, list, form) => {
+    const box = root.querySelector('.studio');
+    if (!box) return;
+    const $ = s => box.querySelector(s);
+    const state = { product: null, colour: null, textName: 'White', logo: null };
+    const select = form.querySelector('[name=styleId]');
+    const describe = () => {
+      form.querySelector('[name=design]').value = ['Design preview: ' + state.product.name + ' (' + state.product.style + ')', 'Colour: ' + state.colour.name, 'Name: ' + ($('[data-st-team]').value.trim() || 'not given'), 'Number: ' + ($('[data-st-no]').value.trim() || 'not given'), 'Text colour: ' + state.textName, state.logo ? 'Logo file: ' + state.logo + ' (not uploaded)' : ''].filter(Boolean).join('\n');
+    };
+    const paint = () => {
+      $('[data-st-img]').src = state.colour.images[0];
+      $('[data-st-name]').textContent = $('[data-st-team]').value.trim() || 'YOUR TEAM';
+      $('[data-st-num]').textContent = $('[data-st-no]').value.trim() || '7';
+      box.querySelectorAll('[data-st-colour]').forEach(b => b.classList.toggle('on', b.dataset.stColour === state.colour.name));
+      box.querySelectorAll('[data-style]').forEach(b => b.classList.toggle('on', b.dataset.style === String(state.product.id)));
+      describe();
+    };
+    const pick = id => {
+      state.product = list.find(p => String(p.id) === String(id)) || list[0];
+      state.colour = state.product.colours[0];
+      $('[data-st-y]').value = 0;
+      box.style.setProperty('--st-y', '0%');
+      if (select) select.value = state.product.id;
+      $('[data-st-colours]').innerHTML = html`${state.product.colours.map(c => html`<button class="swatch" type="button" data-st-colour="${c.name}" aria-label="${c.name}" title="${c.name}" style="background:${c.hex}"></button>`)}`;
+      paint();
+    };
+    box.addEventListener('click', e => {
+      const style = e.target.closest('[data-style]'), colour = e.target.closest('[data-st-colour]'), text = e.target.closest('[data-st-text]');
+      if (style) pick(style.dataset.style);
+      if (colour) { state.colour = state.product.colours.find(c => c.name === colour.dataset.stColour); paint(); }
+      if (text) { box.style.setProperty('--st-text', text.dataset.stText); state.textName = text.dataset.stTextName; describe(); }
+    });
+    box.addEventListener('input', e => {
+      if (e.target.matches('[data-st-team],[data-st-no]')) paint();
+      if (e.target.matches('[data-st-y]')) box.style.setProperty('--st-y', e.target.value + '%');
+    });
+    $('[data-st-file]').addEventListener('change', e => {
+      const file = e.target.files[0], logo = $('[data-st-logo]');
+      if (!file) return;
+      if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) { e.target.value = ''; toast('Choose a PNG, JPG or WebP image up to 5 MB.', true); return; }
+      if (logo.src.startsWith('blob:')) URL.revokeObjectURL(logo.src);
+      logo.src = URL.createObjectURL(file); logo.hidden = false; state.logo = file.name; describe();
+    });
+    if (select) select.addEventListener('change', () => { if (select.value) pick(select.value); });
+    pick((select && select.value) || param('style'));
+  };
+
   page('enquiry', { layout: 'public' }, async main => {
+    const list = await api.catalog.list({});
     main.innerHTML = html`${pageHead('Bulk enquiry', 'For schools, clubs, teams and new dealers. Tell us what you need and our sales team will call you.', [['Home', 'index.html'], ['Bulk enquiry']])}
-    <section class="sec"><div class="wrap"><div class="split">
-      <div class="form-card" id="box"><form class="form" novalidate>
+    <section class="sec"><div class="wrap">${studioMarkup(list)}<div class="split" style="margin-top:24px">
+      <div class="form-card" id="box"><form class="form" novalidate><input type="hidden" name="styleId"><input type="hidden" name="design">
         <div class="form-2">${field('name', 'Contact person', { required: true, autocomplete: 'name' })}${field('phone', 'Mobile number', { required: true, type: 'tel', inputmode: 'numeric', maxlength: 10 })}</div>
         <div class="form-2">${field('organisation', 'Organisation name', { required: true })}${field('orgType', 'Organisation type', { type: 'select', required: true, options: [['', 'Select'], ...ORG] })}</div>
         <div class="form-2">${field('city', 'City', { required: true })}${field('email', 'Email', { type: 'email' })}</div>
@@ -328,11 +394,12 @@
       </form></div>
       <div class="card card-pad"><h3 class="mb">What happens next</h3><ul class="ticks"><li>Our sales team reviews your enquiry</li><li>We call you within one working day</li><li>You receive a quotation for your quantity</li></ul><p class="muted small mb-0">Shop owners should <a class="link" href="register.html">apply for a trade account</a> instead, to order online.</p></div>
     </div></div></section>`;
-    onSubmit(main.querySelector('form'), async v => enquiryDone(main.querySelector('#box'), await api.enquiries.create({ ...v, type: 'bulk' }), 'enquiry'));
+    mountStudio(main, list, main.querySelector('#box form'));
+    onSubmit(main.querySelector('#box form'), async v => enquiryDone(main.querySelector('#box'), await api.enquiries.create({ ...v, type: 'bulk' }), 'enquiry'));
   });
 
   page('custom', { layout: 'public' }, async main => {
-    const [S, list] = await Promise.all([api.settings(), api.catalog.list({ customisable: true })]);
+    const [S, list] = await Promise.all([api.settings(), api.catalog.list({})]);
     main.innerHTML = html`${pageHead('Customised orders', 'Your logo, text, names or numbers on VK7 styles. Send your idea and our team will prepare a quote.', [['Home', 'index.html'], ['Customised orders']])}
     <section class="sec"><div class="wrap">
       <div class="steps mb" style="margin-bottom:32px">
@@ -341,8 +408,9 @@
         <div class="step"><h3>Advance and production</h3><p>After your advance is verified, production starts.</p></div>
         <div class="step"><h3>Balance and dispatch</h3><p>Pay the balance and we dispatch your order.</p></div>
       </div>
-      <div class="split">
-        <div class="form-card" id="box"><h2 class="mb" style="font-size:20px">Send a customised enquiry</h2><form class="form" novalidate>
+      ${studioMarkup(list)}
+      <div class="split" style="margin-top:24px">
+        <div class="form-card" id="box"><h2 class="mb" style="font-size:20px">Send a customised enquiry</h2><form class="form" novalidate><input type="hidden" name="design">
           <div class="form-2">${field('name', 'Contact person', { required: true })}${field('phone', 'Mobile number', { required: true, type: 'tel', inputmode: 'numeric', maxlength: 10 })}</div>
           <div class="form-2">${field('organisation', 'Team or organisation', { required: true })}${field('orgType', 'Type', { type: 'select', required: true, options: [['', 'Select'], ...ORG] })}</div>
           <div class="form-2">${field('city', 'City', { required: true })}${field('email', 'Email', { type: 'email' })}</div>
@@ -354,7 +422,8 @@
         </form></div>
         <div class="card card-pad"><h3 class="mb">Good to know</h3><ul class="ticks"><li>Minimum about ${S.customMoq} pieces per design</li><li>About ${S.customAdvancePct}% advance after artwork approval</li><li>Balance before dispatch</li><li>Production starts only after artwork and advance are both done</li></ul><img src="assets/img/products/tee-mint-tag.jpg" alt="VK7 logo and tags on a Performance Crew Tee" style="border-radius:8px" loading="lazy"></div>
       </div></div></section>`;
-    onSubmit(main.querySelector('form'), async v => {
+    mountStudio(main, list, main.querySelector('#box form'));
+    onSubmit(main.querySelector('#box form'), async v => {
       enquiryDone(main.querySelector('#box'), await api.enquiries.create({ ...v, type: 'custom' }), 'customised order enquiry');
     });
   });

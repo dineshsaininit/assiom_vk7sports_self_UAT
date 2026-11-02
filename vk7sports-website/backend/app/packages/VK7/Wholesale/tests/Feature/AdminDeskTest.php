@@ -142,22 +142,21 @@ it('corrects stock with a reason and never below what orders hold', function () 
 // Quotes And Enquiries
 // ====================================================================
 
-it('shows a target price to staff and carries their offer to the order', function () {
+it('shows a target amount to staff and carries their amount to the order', function () {
     $retailer = retailer();
 
     asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
 
-    $quoteId = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'Order list', 'description' => 'Target price 600'])->assertCreated()->json('data.id');
+    $quoteId = asRetailer($retailer, 'POST', '/api/v1/quotes', ['name' => 'Order list', 'target_amount' => 14400])->assertCreated()->json('data.id');
 
     $token = staffToken();
 
     $quote = asStaff($token, 'GET', "/api/v1/admin/quotes/{$quoteId}")->assertOk()->json('data');
 
-    expect($quote['description'])->toBe('Target price 600');
+    expect($quote['latest_amount'])->toEqual(14400.0)
+        ->and($quote['latest_from'])->toBe('retailer');
 
-    $prices = collect($quote['items'])->mapWithKeys(fn ($item) => [$item['id'] => 630])->all();
-
-    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quoteId}/offer", ['prices' => $prices, 'message' => 'Best rate'])->assertOk();
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quoteId}/offer", ['amount' => 630 * 24])->assertOk();
 
     $seen = asRetailer($retailer, 'GET', "/api/v1/quotes/{$quoteId}")->assertOk()->json('data');
 
@@ -173,7 +172,7 @@ it('shows a target price to staff and carries their offer to the order', functio
     expect(collect($lines)->pluck('price')->unique()->values()->all())->toEqual([630.0]);
 });
 
-it('rejects a quote with a reason', function () {
+it('rejects a quote', function () {
     $retailer = retailer();
 
     asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [24])])->assertSuccessful();
@@ -182,9 +181,7 @@ it('rejects a quote with a reason', function () {
 
     $token = staffToken();
 
-    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quoteId}/reject", [])->assertStatus(422);
-
-    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quoteId}/reject", ['reason' => 'Below cost'])
+    asStaff($token, 'POST', "/api/v1/admin/quotes/{$quoteId}/reject")
         ->assertOk()
         ->assertJsonPath('data.status', 'rejected');
 });

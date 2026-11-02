@@ -1,6 +1,6 @@
 /* Staff back office. Labels use plain business words; each screen is limited by role. */
 (function () {
-  const { invoiceDoc, api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap } = VK7;
+  const { amountTrail, invoiceDoc, api, html, raw, money, date, dateTime, param, icon, badge, tbc, notice, empty, tracker, timeline, field, checkbox, onSubmit, toast, modal, confirmBox, reasonBox, on, act, page, trackingPanel, mountMap } = VK7;
   const title = (t, sub, action) => html`<div class="ptitle"><div><h1>${t}</h1>${sub ? html`<p>${sub}</p>` : ''}</div>${action || ''}</div>`;
   const pcs = lines => lines.reduce((s, l) => s + l.qty, 0);
   /* Whether the staff member holds a desk area the server granted. */
@@ -118,20 +118,21 @@
     const render = async () => {
       const q = await api.admin.quote(id);
       const editable = ['Quote requested', 'Quote ready'].includes(q.status);
-      const listTotal = q.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+      const theirs = editable && q.latestFrom === 'retailer';
       main.innerHTML = html`<a class="link small" href="admin-quotes.html">Back to quotes</a>${title(q.number, q.company + ' · requested ' + date(q.createdAt), badge(q.status))}
-      <form class="stack" id="offer" novalidate>
-        ${q.note ? notice('info', 'Message from the retailer', q.note) : ''}
-        <div class="card"><div class="card-head"><h3>Lines</h3><span class="small muted">List value ${money(listTotal)}</span></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">List price</th><th class="num">Offer price (₹)</th></tr></thead><tbody>${q.lines.map((l, i) => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num"><label class="sr" for="p${i}">Offer price for ${l.name} ${l.colour} ${l.size}</label><input id="p${i}" name="p${i}" class="input" style="width:100px;min-height:36px;padding:4px 8px;text-align:right" type="number" step="0.01" min="0" value="${l.offerPrice ?? l.unitPrice}" ${editable ? '' : raw('disabled')}></td></tr>`)}</tbody></table></div></div>
-        <div class="card"><div class="card-head"><h3>Messages</h3></div><div class="card-pad stack">${q.messages.length ? q.messages.map(m => html`<p class="mb-0"><strong>${m.by}</strong> <span class="small muted">${dateTime(m.at)}</span><br>${m.text}</p>`) : html`<p class="muted mb-0">No messages.</p>`}
-          ${editable ? html`${field('message', 'Message to retailer', { type: 'textarea', rows: 2 })}<div class="row"><button class="btn btn-red" type="submit">Send offer</button><button class="btn btn-danger" type="button" data-reject>Reject quote</button></div>` : ''}</div></div>
-      </form>`;
-      if (editable) onSubmit(main.querySelector('#offer'), async v => {
-        await api.admin.sendOffer(id, { prices: Object.fromEntries(q.lines.map((l, i) => [l.id, v['p' + i]])), message: v.message });
-        toast('Offer sent'); await render();
-      });
+      <div class="stack">
+        ${theirs ? html`<div class="card card-pad row between"><div><h3>Amount from the retailer</h3><p class="muted mb-0">Accept it, or send your own amount below.</p></div><div class="right"><div class="muted small" style="text-decoration:line-through">${money(q.listTotal)}</div><div class="price" style="font-size:22px">${money(q.latestAmount)}</div><button class="btn btn-red mt" type="button" data-accept-amount="${q.latestAmount}">Accept amount</button></div></div>` : ''}
+        ${['Accepted', 'Ordered'].includes(q.status) ? html`<div class="card card-pad row between"><div><h3>Final amount agreed</h3><p class="muted mb-0">The retailer pays against this amount.</p></div><div class="price" style="font-size:22px">${money(q.latestAmount)}</div></div>` : ''}
+        <div class="card"><div class="card-head"><h3>Lines</h3><span class="small muted"><span>List value, before GST</span> ${money(q.listTotal)}</span></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">List price</th></tr></thead><tbody>${q.lines.map(l => html`<tr><td>${l.name}</td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td></tr>`)}</tbody></table></div></div>
+        <div class="card"><div class="card-head"><h3>Amounts</h3></div><div class="card-pad stack">
+          ${amountTrail(q)}
+          ${editable ? html`<form class="form" id="offer" novalidate>${field('amount', 'Your amount for all items, before GST (₹)', { type: 'number', required: true, min: 1, max: q.listTotal })}<div class="row"><button class="btn btn-red" type="submit">Send amount</button><button class="btn btn-danger" type="button" data-reject>Reject quote</button></div></form>` : ''}
+        </div></div>
+      </div>`;
+      if (editable) onSubmit(main.querySelector('#offer'), async v => { await api.admin.sendOffer(id, v.amount); toast('Amount sent'); await render(); });
     };
-    on(main, '[data-reject]', () => reasonBox('Reject quote', 'The retailer will see this reason.', 'Reject quote', async r => { await api.admin.rejectQuote(id, r); toast('Quote rejected'); await render(); }));
+    on(main, '[data-accept-amount]', el => confirmBox('Accept amount', 'This fixes the amount as the final price for this quote.', 'Accept amount', async () => { await api.admin.acceptQuote(id, el.dataset.acceptAmount); toast('Amount accepted'); await render(); }));
+    on(main, '[data-reject]', () => confirmBox('Reject quote', 'This closes the quote.', 'Reject quote', async () => { await api.admin.rejectQuote(id); toast('Quote rejected'); await render(); }, true));
     await render();
   });
 
