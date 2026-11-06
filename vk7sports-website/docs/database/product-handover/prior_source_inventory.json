@@ -1,0 +1,98 @@
+{
+  "inspected_on": "2026-11-06",
+  "repository": "dineshsaininit/assiom_vk7sports_self_UAT",
+  "base_commit": "e745b38ba928b4361fd68a07abc5eecabaf863d7",
+  "source_root": "vk7sports-website",
+  "method": "Read-only file enumeration, SQL INSERT tuple counts and SHA-256 checks. No database queried.",
+  "schema_tables": 182,
+  "schema_insert_statements": 0,
+  "base_data_copy_statements": 0,
+  "export_rows": {
+    "products": 0,
+    "product_flat": 0,
+    "product_attribute_values": 0,
+    "product_super_attributes": 0,
+    "product_categories": 0,
+    "product_inventories": 0,
+    "product_ordered_inventories": 0,
+    "product_inventory_indices": 0,
+    "product_images": 0,
+    "product_customer_group_prices": 0,
+    "customers": 0,
+    "orders": 0,
+    "categories": 1,
+    "inventory_sources": 1,
+    "attributes": 30,
+    "attribute_options": 9,
+    "migrations": 238
+  },
+  "sample_products": 3,
+  "bagisto_csv_sample_rows": 26,
+  "approved_business_products_found": 0,
+  "live_uat_verified": false,
+  "app_env_present": false,
+  "vendor_present": false,
+  "files": [
+    {
+      "path": "docs/database/vk7sports_schema.sql",
+      "bytes": 337334,
+      "sha256": "d3284f33b45a2701b9ec59ad767e1a42300dd3f4f213d94899c6d49305ab973b"
+    },
+    {
+      "path": "docs/database/vk7sports_base_data.sql",
+      "bytes": 140189,
+      "sha256": "9dff1ae25756478efa390cda36694eb58ef44b047017f95158e7d92aabc8686d"
+    },
+    {
+      "path": "data/sample-products.json",
+      "bytes": 1335,
+      "sha256": "9b40702ab171887fc74819381ef85b0b707a57055ebe2a01edd05b5186c5f1f9"
+    },
+    {
+      "path": "data/sample-categories.json",
+      "bytes": 747,
+      "sha256": "6a22b4a8853823194cd78f9652d6824fbbba7a0a469944f482d9307a3459bc8b"
+    },
+    {
+      "path": "data/sample-tier-pricing.json",
+      "bytes": 689,
+      "sha256": "dbc39056c4e845291b24c7935ac3f3d1398ed0359ebb28848519cc408f36e37e"
+    },
+    {
+      "path": "backend/app/storage/app/public/data-transfer/samples/csv/products.csv",
+      "bytes": 32209,
+      "sha256": "2fff73511c162f1824665585523761f401764d9615955fa47e63ef51f854b81a"
+    },
+    {
+      "path": "backend/app/packages/VK7/Wholesale/src/Console/Commands/DemoData.php",
+      "bytes": 5570,
+      "sha256": "cd139235661990c91c965611ae98cafd8b1138102ab34842ddf42217ee34c697"
+    },
+    {
+      "path": "docs/database/NEON_SETUP.md",
+      "bytes": 4113,
+      "sha256": "6860b4c4ca363bbad3d3a70e6cd797af264ac4ba2891906ffd3bce0e80394c01"
+    },
+    {
+      "path": "backend/app/.env.example",
+      "bytes": 2211,
+      "sha256": "92943ee96ac77004ae8786b8dfdf66b19cb723a8a2f2132c82748d7821dab9cc"
+    },
+    {
+      "path": "backend/docker/compose.dev.yml",
+      "bytes": 1506,
+      "sha256": "ba2ce183c3d464abee58d7abfd9cdc61f6b96758be1cfc768f5a9d0b8fa4a2f4"
+    },
+    {
+      "path": "docs/client-information/CLIENT_PROFILE_AND_BUSINESS_FACTS.md",
+      "bytes": 2123,
+      "sha256": "d882d98d2629b166bcc6e1a0f4d07b96269fe52b7f13aeb34df4d2cc2030ca50"
+    },
+    {
+      "path": "assets/README.md",
+      "bytes": 2419,
+      "sha256": "2f7fdbbf27c118b233c08a5d53b8525f64efbd1e59f6ebb15226da56b5fdec2f"
+    }
+  ],
+  "provenance": "Historical inspection evidence preserved from earlier commit 0a140e56066560f3dbb8d21a27451322ca916342; not a new audit or live database result."
+}

@@ -1,0 +1,3 @@
+data_class,source_ref,approval_ref,code,status
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,synthetic-main,active
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,synthetic-other,active

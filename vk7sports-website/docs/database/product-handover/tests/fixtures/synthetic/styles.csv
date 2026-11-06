@@ -1,0 +1,2 @@
+data_class,source_ref,approval_ref,style_sku,name,category_path,short_description,description,status,moq_qty,moq_basis,currency,tax_basis,size_chart_id
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,SYNTHETIC-STYLE-001,SYNTHETIC TEST STYLE - NOT FOR SALE,SYNTHETIC Test Category,Synthetic fixture only.,Not an actual VK7SPORTS product.,hidden,24,per_style,INR,exclusive,SYNTHETIC-CHART

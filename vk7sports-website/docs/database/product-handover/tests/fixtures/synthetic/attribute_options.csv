@@ -1,0 +1,4 @@
+data_class,source_ref,approval_ref,attribute_family_code,attribute_code,label
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,default,color,Test Blue
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,default,size,Test S
+synthetic,SYNTHETIC-FIXTURE-NOT-BUSINESS,SYNTHETIC-NO-BUSINESS-APPROVAL,default,size,Test M
