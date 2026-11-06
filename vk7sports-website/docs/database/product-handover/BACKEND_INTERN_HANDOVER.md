@@ -12,6 +12,21 @@ Package: vk7sports-website/docs/database/product-handover/, branch aryan/product
 - tests/: 48 synthetic-only tests, 10 fixture files, expected native CSV and validation report.
 - PRIOR_DELIVERY_COMPARISON.md and prior_source_inventory.json: comparison and historical inspection evidence.
 
+## Existing tables and required inputs
+
+| Data | Existing tables / settings |
+|---|---|
+| Styles and sellable variants | products: configurable parent and simple children linked by parent_id. |
+| Colour/size options | attributes, attribute_options, product_attribute_values; parent product_super_attributes and existing family mappings. |
+| Counted stock and reservations | inventory_sources, product_inventories, channel_inventory_sources; reservations in product_ordered_inventories. |
+| Fixed quantity tiers | product_customer_group_prices and customer_groups. |
+| Product attributes, images and read models | product_attribute_values, product_images, product_flat and inventory/price indexes. |
+| MOQ | core_config keys vk7.moq.settings.enabled, min_qty, mode and apply_to_admin_orders; not a per-product import column. |
+
+Start collection with [PRODUCT_DATA_INTAKE.md](PRODUCT_DATA_INTAKE.md); use the existing header-only templates and validator. Obtain the exact connection/environment, SSL, default channel, locale/family/options, source/group codes, tax/currency/weight and MOQ settings in [DATABASE_CONFIGURATION_HANDOFF.md](DATABASE_CONFIGURATION_HANDOFF.md). Credential values must arrive through the team's approved secret channel.
+
+The unresolved business dependencies are the approved product master and launch counts, valid combinations, counted source-level stock/date, prices/tier or no-tier approvals, MOQ approval, measured weights, images and size charts. No actual records are supplied here. [MISSING_DATA_AND_APPROVALS.md](MISSING_DATA_AND_APPROVALS.md) records the gates; native import and reconciliation require separately authorized staging access.
+
 ## Next actions when real inputs arrive
 
 1. Collect approved source master, counted stock, prices/tiers or no-tier approval, MOQ policy, images, weights and size charts. Fill copies of all ten intake files; do not fill unknowns with zero or plausible values.

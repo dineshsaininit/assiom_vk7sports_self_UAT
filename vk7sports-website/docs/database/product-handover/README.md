@@ -14,6 +14,8 @@ Base: `main` at `e745b38ba928b4361fd68a07abc5eecabaf863d7`
 
 Start with [BACKEND_INTERN_HANDOVER.md](BACKEND_INTERN_HANDOVER.md) for the concise operational handoff.
 
+Use [PRODUCT_DATA_INTAKE.md](PRODUCT_DATA_INTAKE.md) to collect identifiers, colour/size variants, counted source-level stock, prices and MOQ through the existing validated blank templates. The [database configuration checklist](DATABASE_CONFIGURATION_HANDOFF.md) lists the exact connection and product-import settings the operator must supply.
+
 ## Files to hand to the intern
 
 | File/directory | Purpose |
