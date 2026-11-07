@@ -39,6 +39,7 @@
         "laravel/ui": "^4.0",
         "league/flysystem-aws-s3-v3": "^3.0",
         "maatwebsite/excel": "^3.1.46",
+        "mongodb/laravel-mongodb": "^5.11",
         "mpdf/mpdf": "^8.2",
         "nesbot/carbon": "^3.0",
         "paypal/paypal-server-sdk": "^2.0",

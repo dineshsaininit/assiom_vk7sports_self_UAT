@@ -1,0 +1,14 @@
+{
+    "checked_at": "2026-11-07T18:38:43+05:30",
+    "app_env": "uat",
+    "hosts": "vk7sports-uat.o0ciyru.mongodb.net",
+    "database": "vk7sports_uat",
+    "ok": true,
+    "server_version": "8.0.37",
+    "ping": true,
+    "insert": true,
+    "read_back": true,
+    "delete": true,
+    "round_trip_ms": 4257,
+    "mirrored_activity": 0
+}
