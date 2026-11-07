@@ -15,7 +15,7 @@ MySQL stays the main database. Atlas only receives a copy of each staff activity
 In `backend/app/.env` (gitignored, never committed):
 
 ```
-MONGODB_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/?retryWrites=true&w=majority&appName=vk7sports
+MONGODB_URI=<paste the mongodb+srv connection string from Atlas Connect, Drivers>
 MONGODB_DATABASE=vk7sports_uat
 MONGODB_TIMEOUT_MS=2000
 VK7_ATLAS_MIRROR=true
