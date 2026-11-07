@@ -23,12 +23,14 @@ use VK7\Wholesale\Http\Middleware\Bouncer;
 use VK7\Wholesale\Http\Middleware\CloseBagistoAdmin;
 use VK7\Wholesale\Http\Middleware\CloseBagistoShop;
 use VK7\Wholesale\Http\Middleware\HidePricesFromGuests;
+use VK7\Wholesale\Http\Middleware\HideServerHeaders;
 use VK7\Wholesale\Moq;
 use VK7\Wholesale\OrderNumberSequencer;
 use VK7\Wholesale\Payments\PaymentGateway;
 use VK7\Wholesale\QuoteLock;
 use VK7\Wholesale\Repositories\CustomerQuoteRepository;
 use VK7\Wholesale\Services\OrderFinance;
+use VK7\Wholesale\Services\RetailerStanding;
 use Webkul\B2BSuite\Repositories\CustomerQuoteRepository as BaseCustomerQuoteRepository;
 use Webkul\Checkout\Cart as BaseCart;
 use Webkul\Sales\Generators\OrderSequencer;
@@ -71,11 +73,16 @@ class WholesaleServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(dirname(__DIR__).'/Database/Migrations');
 
+        // Record ids in our routes are always whole numbers; anything else is refused before any code runs.
+        $router->patterns(['id' => '[0-9]{1,10}', 'paymentId' => '[0-9]{1,10}', 'imageId' => '[0-9]{1,10}', 'productId' => '[0-9]{1,10}']);
+
         $this->loadRoutesFrom(dirname(__DIR__).'/Routes/api.php');
 
         $this->loadRoutesFrom(dirname(__DIR__).'/Routes/admin.php');
 
         $this->app->make(Kernel::class)->prependMiddleware(CloseBagistoShop::class);
+
+        $this->app->make(Kernel::class)->prependMiddleware(HideServerHeaders::class);
 
         $router->pushMiddlewareToGroup('web', CloseBagistoAdmin::class);
 
@@ -95,7 +102,9 @@ class WholesaleServiceProvider extends ServiceProvider
 
         Event::listen('checkout.order.save.before', [QuoteLock::class, 'assertOrder']);
 
-        Event::listen('checkout.order.save.after', fn ($order) => app(OrderFinance::class)->terms($order));
+        Event::listen('checkout.order.save.before', [RetailerStanding::class, 'assertOrder']);
+
+        Event::listen('checkout.order.save.after', fn ($order) => app(OrderFinance::class)->openTerms($order));
 
         Event::listen('sales.order.cancel.after', fn ($order) => app(OrderFinance::class)->markCancelled($order));
 
@@ -124,5 +133,11 @@ class WholesaleServiceProvider extends ServiceProvider
         RateLimiter::for('vk7-login', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
 
         RateLimiter::for('vk7-forms', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+
+        // Money and account actions: limited per signed-in token as well as per address.
+        RateLimiter::for('vk7-actions', fn (Request $request) => [
+            Limit::perMinute(20)->by('token:'.sha1((string) $request->bearerToken())),
+            Limit::perMinute(40)->by('ip:'.$request->ip()),
+        ]);
     }
 }

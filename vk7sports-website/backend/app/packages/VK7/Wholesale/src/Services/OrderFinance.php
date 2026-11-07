@@ -15,12 +15,17 @@ class OrderFinance
     /**
      * Stages after which nothing is owed.
      */
-    public const CLOSED_STAGES = ['Cancelled', 'Expired'];
+    public const CLOSED_STAGES = ['Cancelled', 'Expired', 'Returned'];
 
     /**
      * Stages that can no longer be paused or cancelled.
      */
-    public const FINAL_STAGES = ['Delivered', 'Paid in full', 'Cancelled', 'Expired'];
+    public const FINAL_STAGES = ['Delivered', 'Paid in full', 'Cancelled', 'Expired', 'Returned'];
+
+    /**
+     * Payment modes: the balance before dispatch, or collected on delivery.
+     */
+    public const MODES = ['prepaid', 'cod'];
 
     /**
      * Create a new service instance.
@@ -29,26 +34,64 @@ class OrderFinance
         protected OrderRepository $orderRepository,
         protected PaymentGateway $gateway,
         protected ActivityRecorder $activity,
+        protected RetailerStanding $standing,
     ) {}
 
     /**
-     * Return an order's terms, fixing the advance from the settings when first seen.
+     * Return an order's terms. Orders placed through checkout get them from openTerms; this is the fallback.
      */
     public function terms($order): OrderTerm
     {
-        $percent = (float) (core()->getConfigData('vk7.payments.terms.advance_percent') ?: 10);
+        $existing = OrderTerm::where('order_id', $order->id)->first();
 
+        if ($existing) {
+            return $existing;
+        }
+
+        return $this->createTerms($order, $this->standing->baseAdvance(), false, null);
+    }
+
+    /**
+     * Fix an order's advance and payment mode from the retailer's standing when it is placed.
+     */
+    public function openTerms($order): OrderTerm
+    {
+        if ($existing = OrderTerm::where('order_id', $order->id)->first()) {
+            return $existing;
+        }
+
+        $policy = $this->standing->policy($this->standing->companyId((int) $order->customer_id), (float) $order->base_grand_total);
+
+        return $this->createTerms($order, $policy['advance_percent'], $policy['first_order'], $policy['note']);
+    }
+
+    /**
+     * Create the terms row once.
+     */
+    protected function createTerms($order, float $percent, bool $firstOrder, ?string $note): OrderTerm
+    {
         $hours = (int) (core()->getConfigData('vk7.payments.terms.hold_hours') ?: 48);
 
         $total = (float) $order->base_grand_total;
 
         return OrderTerm::firstOrCreate(['order_id' => $order->id], [
             'stage' => in_array($order->status, ['canceled', 'closed']) ? 'Cancelled' : 'Awaiting advance',
+            'payment_mode' => $order->payment?->method === 'cashondelivery' ? 'cod' : 'prepaid',
+            'first_order' => $firstOrder,
+            'risk_note' => $note,
             'advance_percent' => $percent,
             'advance_due' => round($total * $percent / 100, 2),
             'total' => $total,
             'hold_until' => $order->created_at->copy()->addHours($hours),
         ]);
+    }
+
+    /**
+     * What cancelling this order now would cost.
+     */
+    public function cancellationQuote($order): array
+    {
+        return $this->standing->cancellation($this->terms($order), $order);
     }
 
     /**
@@ -66,6 +109,15 @@ class OrderFinance
 
         return [
             'stage' => $term->stage,
+            'payment_mode' => $term->payment_mode,
+            'balance_before_dispatch' => $term->payment_mode !== 'cod',
+            'first_order' => (bool) $term->first_order,
+            'risk_note' => $term->risk_note,
+            'cancelled_by' => $term->cancelled_by,
+            'cancel_deduction' => $term->cancel_deduction,
+            'refund_due' => $term->refund_due,
+            'refund_status' => $term->refund_status,
+            'refund_reference' => $term->refund_reference,
             'advance_percent' => $term->advance_percent,
             'advance_due' => $term->advance_due,
             'balance_due' => round($term->total - $term->advance_due, 2),
@@ -223,6 +275,8 @@ class OrderFinance
 
         $payment->update(['status' => 'rejected', 'reviewed_by' => $actor, 'reject_reason' => $reason]);
 
+        $this->standing->recordForOrder($payment->order, 'payment_rejected', $actor, $reason);
+
         $this->activity->record($actor, 'Rejected payment', $payment->order->increment_id, $payment->reference);
     }
 
@@ -305,21 +359,105 @@ class OrderFinance
     }
 
     /**
-     * Cancel an order and release its stock.
+     * Cancel an order and release its stock. When the retailer is at fault, the cancellation
+     * policy keeps part of what was paid and lowers their score; the rest is owed back.
      */
-    public function cancel($order, string $reason, string $actor): void
+    public function cancel($order, string $reason, string $actor, string $fault = 'retailer'): array
     {
         $term = $this->terms($order);
 
+        $quote = $this->standing->cancellation($term, $order);
+
         if (
-            in_array($term->stage, self::FINAL_STAGES)
+            ! $quote['allowed']
+            || in_array($term->stage, self::FINAL_STAGES)
             || $term->stage === 'Dispatched'
-            || ! $this->orderRepository->cancel($order)
         ) {
             throw new BusinessRuleException(trans('This order can no longer be cancelled.'), 'CANNOT_CANCEL');
         }
 
-        $this->activity->record($actor, 'Cancelled order', $order->increment_id, $reason);
+        if (Payment::where('order_id', $order->id)->where('status', 'submitted')->exists()) {
+            throw new BusinessRuleException(trans('A payment on this order is waiting to be checked. Please try again after it is reviewed.'), 'PAYMENT_PENDING');
+        }
+
+        $deduction = $fault === 'retailer' ? $quote['deduction'] : 0.0;
+
+        $refund = round($quote['paid'] - $deduction, 2);
+
+        if (! $this->orderRepository->cancel($order)) {
+            throw new BusinessRuleException(trans('This order can no longer be cancelled.'), 'CANNOT_CANCEL');
+        }
+
+        $this->terms($order)->update([
+            'stage' => 'Cancelled',
+            'hold_until' => null,
+            'cancelled_by' => $fault,
+            'cancel_deduction' => $deduction,
+            'refund_due' => $refund,
+            'refund_status' => $refund > 0 ? 'pending' : null,
+        ]);
+
+        if (
+            $fault === 'retailer'
+            && $quote['event']
+        ) {
+            $this->standing->recordForOrder($order, $quote['event'], $actor, $reason);
+        }
+
+        $this->activity->record($actor, 'Cancelled order', $order->increment_id, $reason.' (deduction ₹'.number_format($deduction, 2).', refund ₹'.number_format($refund, 2).')');
+
+        return ['deduction' => $deduction, 'refund' => $refund];
+    }
+
+    /**
+     * The retailer refused a cash-on-delivery parcel: the order is returned and the policy deduction applies.
+     */
+    public function markCodRefused($order, string $note, string $actor): void
+    {
+        $term = $this->terms($order);
+
+        if (
+            $term->payment_mode !== 'cod'
+            || ! in_array($term->stage, ['Dispatched', 'Delivered'])
+        ) {
+            throw new BusinessRuleException(trans('Only a dispatched cash-on-delivery order can be marked as refused.'), 'INVALID_STAGE');
+        }
+
+        $paid = round((float) Payment::where('order_id', $order->id)->where('status', 'verified')->sum('amount'), 2);
+
+        $percent = $this->standing->setting('cancelPackingPct');
+
+        $deduction = min($paid, round($term->total * $percent / 100, 2));
+
+        $refund = round($paid - $deduction, 2);
+
+        $term->update([
+            'stage' => 'Returned',
+            'cancelled_by' => 'retailer',
+            'cancel_deduction' => $deduction,
+            'refund_due' => $refund,
+            'refund_status' => $refund > 0 ? 'pending' : null,
+        ]);
+
+        $this->standing->recordForOrder($order, 'cod_refused', $actor, $note);
+
+        $this->activity->record($actor, 'Cash on delivery refused, order returned', $order->increment_id, $note);
+    }
+
+    /**
+     * Finance records the refund owed after a cancellation.
+     */
+    public function markRefunded($order, string $reference, string $actor): void
+    {
+        $term = $this->terms($order);
+
+        if ($term->refund_status !== 'pending') {
+            throw new BusinessRuleException(trans('No refund is waiting on this order.'), 'NO_REFUND');
+        }
+
+        $term->update(['refund_status' => 'refunded', 'refund_reference' => $reference]);
+
+        $this->activity->record($actor, 'Refund paid', $order->increment_id, '₹'.number_format((float) $term->refund_due, 2).' ref '.$reference);
     }
 
     /**
@@ -367,9 +505,13 @@ class OrderFinance
             ) {
                 $term->update(['stage' => 'Expired', 'hold_until' => null]);
 
+                $this->standing->recordForOrder($order, 'advance_expired', 'System');
+
                 $this->activity->record('System', 'Order expired: no advance received', $order->increment_id);
             }
         }
+
+        $this->standing->markLatePayments();
 
         return $overdue->count();
     }
@@ -418,7 +560,14 @@ class OrderFinance
             return 'advance';
         }
 
-        return $term->stage === 'Delivered' && $paid < $term->total ? 'balance' : null;
+        if ($paid >= $term->total) {
+            return null;
+        }
+
+        // Prepaid orders clear the balance before dispatch; cash-on-delivery orders after delivery.
+        $balanceStages = $term->payment_mode === 'cod' ? ['Delivered'] : ['Confirmed', 'Packing', 'Delivered'];
+
+        return in_array($term->stage, $balanceStages) ? 'balance' : null;
     }
 
     /**
@@ -475,6 +624,8 @@ class OrderFinance
             $term->update(['stage' => 'Paid in full']);
 
             $this->orderRepository->updateOrderStatus($order, Order::STATUS_COMPLETED);
+
+            $this->standing->recordForOrder($order, 'order_completed', 'System');
         }
     }
 }

@@ -30,6 +30,15 @@ class ShipmentDesk
             throw new BusinessRuleException(trans('Only packed orders can be dispatched.'), 'INVALID_STAGE');
         }
 
+        $money = $this->finance->summary($order);
+
+        if (
+            $money['payment_mode'] !== 'cod'
+            && $money['outstanding'] > 0
+        ) {
+            throw new BusinessRuleException(trans('This is a prepaid order. The full amount must be paid before dispatch.'), 'BALANCE_DUE');
+        }
+
         $address = $order->shipping_address ?? $order->billing_address;
 
         $booking = $this->courier->book([

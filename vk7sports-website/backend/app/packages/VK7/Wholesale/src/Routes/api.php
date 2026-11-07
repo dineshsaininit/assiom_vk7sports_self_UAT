@@ -5,6 +5,7 @@ use VK7\Wholesale\Http\Controllers\Api\AccountController;
 use VK7\Wholesale\Http\Controllers\Api\Admin\AdminDeskController;
 use VK7\Wholesale\Http\Controllers\Api\Admin\DeskController;
 use VK7\Wholesale\Http\Controllers\Api\Admin\StaffAuthController;
+use VK7\Wholesale\Http\Controllers\Api\Admin\SupportDeskController;
 use VK7\Wholesale\Http\Controllers\Api\AuthController;
 use VK7\Wholesale\Http\Controllers\Api\CartController;
 use VK7\Wholesale\Http\Controllers\Api\CatalogController;
@@ -13,6 +14,8 @@ use VK7\Wholesale\Http\Controllers\Api\EnquiryController;
 use VK7\Wholesale\Http\Controllers\Api\OrderController;
 use VK7\Wholesale\Http\Controllers\Api\PaymentController;
 use VK7\Wholesale\Http\Controllers\Api\QuoteController;
+use VK7\Wholesale\Http\Controllers\Api\StandingController;
+use VK7\Wholesale\Http\Controllers\Api\SupportController;
 use VK7\Wholesale\Http\Middleware\AuthenticateRetailer;
 use VK7\Wholesale\Http\Middleware\AuthenticateStaff;
 use VK7\Wholesale\Http\Middleware\ForceJson;
@@ -37,6 +40,18 @@ Route::group([
 
             Route::post('logout', [StaffAuthController::class, 'logout'])->name('logout');
         });
+
+        Route::controller(SupportDeskController::class)
+            ->middleware(AuthenticateStaff::class.':support')
+            ->prefix('support')
+            ->name('support.')
+            ->group(function () {
+                Route::get('', 'index')->name('index');
+
+                Route::get('{id}', 'show')->whereNumber('id')->name('show');
+
+                Route::put('{id}', 'update')->whereNumber('id')->name('update');
+            });
 
         Route::controller(AdminDeskController::class)->group(function () {
             Route::get('orders/{id}/invoice', 'invoice')->middleware(AuthenticateStaff::class.':orders')->name('orders.invoice');
@@ -115,6 +130,10 @@ Route::group([
                 Route::get('clients/{id}', 'client')->name('clients.show');
 
                 Route::post('clients/{id}/decision', 'decideClient')->name('clients.decide');
+
+                Route::get('clients/{id}/standing', 'standing')->name('clients.standing');
+
+                Route::post('clients/{id}/standing', 'updateStanding')->middleware('throttle:vk7-actions')->name('clients.standing.update');
             });
 
             Route::middleware(AuthenticateStaff::class.':orders')->group(function () {
@@ -126,7 +145,11 @@ Route::group([
 
                 Route::post('orders/{id}/resume', 'resumeOrder')->name('orders.resume');
 
-                Route::post('orders/{id}/cancel', 'cancelOrder')->name('orders.cancel');
+                Route::post('orders/{id}/cancel', 'cancelOrder')->middleware('throttle:vk7-actions')->name('orders.cancel');
+
+                Route::get('orders/{id}/cancellation', 'cancellationQuote')->name('orders.cancellation');
+
+                Route::post('orders/{id}/cod-refused', 'codRefused')->middleware('throttle:vk7-actions')->name('orders.cod-refused');
             });
 
             Route::middleware(AuthenticateStaff::class.':payments')->group(function () {
@@ -135,6 +158,8 @@ Route::group([
                 Route::post('payments/{id}/review', 'reviewPayment')->name('payments.review');
 
                 Route::post('orders/{id}/collection', 'recordCollection')->name('orders.collection');
+
+                Route::post('orders/{id}/refund', 'markRefunded')->middleware('throttle:vk7-actions')->name('orders.refund');
             });
 
             Route::middleware(AuthenticateStaff::class.':dispatch')->group(function () {
@@ -180,6 +205,14 @@ Route::group([
         Route::post('enquiries', [EnquiryController::class, 'store'])
             ->middleware('throttle:vk7-forms')
             ->name('enquiries.store');
+
+        Route::post('support', [SupportController::class, 'store'])
+            ->middleware(['throttle:vk7-forms', AuthenticateRetailer::class.':optional'])
+            ->name('support.store');
+
+        Route::post('support/check', [SupportController::class, 'check'])
+            ->middleware('throttle:vk7-forms')
+            ->name('support.check');
     });
 
     /**
@@ -193,6 +226,8 @@ Route::group([
         Route::post('moq/check', [CartController::class, 'check'])->name('moq.check');
 
         Route::get('enquiries/mine', [EnquiryController::class, 'mine'])->name('enquiries.mine');
+
+        Route::get('support/mine', [SupportController::class, 'mine'])->name('support.mine');
 
         Route::controller(AccountController::class)->prefix('account')->name('account.')->group(function () {
             Route::get('', 'show')->name('show');
@@ -232,6 +267,10 @@ Route::group([
             Route::post('order', 'order')->name('order');
         });
 
+        Route::get('checkout/policy', [StandingController::class, 'checkout'])->name('checkout.policy');
+
+        Route::get('account/standing', [StandingController::class, 'show'])->name('account.standing');
+
         Route::controller(QuoteController::class)->prefix('quotes')->name('quotes.')->group(function () {
             Route::get('', 'index')->name('index');
 
@@ -263,7 +302,9 @@ Route::group([
 
             Route::get('{id}/invoice', 'invoice')->name('invoice');
 
-            Route::post('{id}/cancel', 'cancel')->name('cancel');
+            Route::get('{id}/cancellation', 'cancellation')->name('cancellation');
+
+            Route::post('{id}/cancel', 'cancel')->middleware('throttle:vk7-actions')->name('cancel');
         });
     });
 });

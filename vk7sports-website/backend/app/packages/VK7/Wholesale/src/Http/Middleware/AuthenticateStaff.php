@@ -37,7 +37,7 @@ class AuthenticateStaff
      */
     public static function areasFor($staff): array
     {
-        $areas = ['dashboard', 'retailers', 'enquiries', 'quotes', 'orders', 'payments', 'dispatch', 'products', 'inventory', 'reports', 'staff', 'settings', 'audit'];
+        $areas = ['dashboard', 'retailers', 'enquiries', 'support', 'quotes', 'orders', 'payments', 'dispatch', 'products', 'inventory', 'reports', 'staff', 'settings', 'audit'];
 
         if ($staff->role?->permission_type === 'all') {
             return $areas;

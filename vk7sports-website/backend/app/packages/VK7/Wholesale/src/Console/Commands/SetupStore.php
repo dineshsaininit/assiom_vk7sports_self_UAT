@@ -15,7 +15,7 @@ class SetupStore extends Command
      * Staff roles and the business desk areas each one uses.
      */
     public const ROLES = [
-        'Sales' => ['dashboard', 'retailers', 'enquiries', 'quotes', 'orders'],
+        'Sales' => ['dashboard', 'retailers', 'enquiries', 'support', 'quotes', 'orders'],
         'Inventory' => ['dashboard', 'products', 'inventory', 'orders'],
         'Warehouse' => ['dashboard', 'orders', 'dispatch'],
         'Finance' => ['dashboard', 'payments', 'orders', 'retailers', 'reports'],

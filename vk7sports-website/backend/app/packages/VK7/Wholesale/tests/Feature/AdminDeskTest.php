@@ -247,7 +247,7 @@ it('saves company details and shows bank details only to retailers', function ()
         'legalName' => 'Real Company Pvt Ltd',
         'gstin' => '27ABCDE1234F1Z5',
         'upiId' => 'real@upi',
-        'advancePct' => 15,
+        'advancePct' => 25,
     ]))->assertOk()->assertJsonPath('data.legalName', 'Real Company Pvt Ltd');
 
     app('auth')->forgetGuards();
@@ -256,7 +256,7 @@ it('saves company details and shows bank details only to retailers', function ()
 
     expect($public['company']['legalName'])->toBe('Real Company Pvt Ltd')
         ->and($public['bank'])->toBeNull()
-        ->and($public['payments']['advance_percent'])->toEqual(15);
+        ->and($public['payments']['advance_percent'])->toEqual(25);
 
     expect(asRetailer($retailer, 'GET', '/api/v1/meta')->json('data.bank.upiId'))->toBe('real@upi');
 });
@@ -296,4 +296,73 @@ it('prepares a fresh store with roles and a one-time owner password', function (
     expect(Role::where('name', 'Finance')->exists())->toBeTrue()
         ->and(Admin::where('email', 'owner@example.test')->exists())->toBeTrue()
         ->and(Hash::check('admin123', Admin::where('email', 'owner@example.test')->value('password')))->toBeFalse();
+});
+
+// ====================================================================
+// Customer Support
+// ====================================================================
+
+it('takes a support ticket from a guest and lets them check it', function () {
+    test()->postJson('/api/v1/support', ['name' => 'x'])->assertUnprocessable();
+
+    $ticket = test()->postJson('/api/v1/support', [
+        'name' => 'Guest Buyer',
+        'phone' => '9876543210',
+        'category' => 'delivery',
+        'subject' => 'Parcel not received',
+        'message' => 'My parcel has not reached the shop yet.',
+    ])->assertCreated()->json('data');
+
+    expect($ticket['number'])->toStartWith('SUP-')
+        ->and($ticket['status'])->toBe('open')
+        ->and($ticket['contact_within_hours'])->toBe(24)
+        ->and($ticket['preferred_contact'])->toBe('phone');
+
+    test()->postJson('/api/v1/support/check', ['number' => $ticket['number'], 'contact' => '9000000000'])->assertNotFound();
+
+    test()->postJson('/api/v1/support/check', ['number' => $ticket['number'], 'contact' => '9876543210'])
+        ->assertOk()
+        ->assertJsonPath('data.subject', 'Parcel not received')
+        ->assertJsonMissingPath('data.notes');
+});
+
+it('lets support staff reply and shows the reply to the retailer', function () {
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/support', [
+        'name' => 'Test Alpha',
+        'category' => 'payment',
+        'subject' => 'Payment taken twice',
+        'message' => 'The advance was charged two times on my card.',
+    ])->assertCreated();
+
+    $token = staffToken(['support']);
+
+    $list = asStaff($token, 'GET', '/api/v1/admin/support')->assertOk();
+
+    expect($list->json('meta.open'))->toBe(1)
+        ->and($list->json('data.0.priority'))->toBe('high')
+        ->and($list->json('data.0.email'))->toBe($retailer['email']);
+
+    $id = $list->json('data.0.id');
+
+    $saved = asStaff($token, 'PUT', "/api/v1/admin/support/{$id}", [
+        'status' => 'resolved',
+        'priority' => 'high',
+        'reply' => 'We have refunded the second charge.',
+        'note' => 'Refund done in gateway',
+    ])->assertOk()->json('data');
+
+    expect($saved['status'])->toBe('resolved')
+        ->and($saved['assigned_to'])->toBe('TEST Staff')
+        ->and($saved['notes'][0]['text'])->toBe('Refund done in gateway')
+        ->and($saved['resolved_at'])->not->toBeNull();
+
+    $mine = asRetailer($retailer, 'GET', '/api/v1/support/mine')->assertOk()->json('data');
+
+    expect($mine)->toHaveCount(1)
+        ->and($mine[0]['reply'])->toBe('We have refunded the second charge.')
+        ->and($mine[0])->not->toHaveKey('notes');
+
+    asStaff(staffToken(['orders']), 'GET', '/api/v1/admin/support')->assertForbidden();
 });

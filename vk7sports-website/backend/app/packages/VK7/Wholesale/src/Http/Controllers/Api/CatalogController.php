@@ -60,9 +60,9 @@ class CatalogController extends Controller
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer'],
-            'color' => ['nullable', 'string'],
-            'size' => ['nullable', 'string'],
-            'sort' => ['nullable', 'string', 'max:50'],
+            'color' => ['nullable', 'string', 'max:100', 'regex:/^[0-9,]+$/'],
+            'size' => ['nullable', 'string', 'max:100', 'regex:/^[0-9,]+$/'],
+            'sort' => ['nullable', 'string', 'max:50', 'regex:/^[a-z_]{1,30}-(asc|desc)$/'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
             'include_grid' => ['nullable', 'boolean'],

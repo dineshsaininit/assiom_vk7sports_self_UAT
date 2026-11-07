@@ -19,6 +19,15 @@ class StoreSettings
         'quoteValidityDays' => ['b2b.quotes.settings.default_expiration_period', 'default'],
         'lowStock' => ['vk7.inventory.low_stock', null],
         'taxInvoiceApproved' => ['vk7.invoice.tax_approved', null],
+        'codMinScore' => ['vk7.risk.cod_min_score', null],
+        'codMinOrders' => ['vk7.risk.cod_min_orders', null],
+        'codMaxOrder' => ['vk7.risk.cod_max_order', null],
+        'newMidValue' => ['vk7.risk.new_mid_value', null],
+        'newMidPct' => ['vk7.risk.new_mid_percent', null],
+        'newPrepaidAbove' => ['vk7.risk.new_prepaid_above', null],
+        'cancelConfirmedPct' => ['vk7.risk.cancel_confirmed_percent', null],
+        'cancelPackingPct' => ['vk7.risk.cancel_packing_percent', null],
+        'lateDays' => ['vk7.risk.late_days', null],
     ];
 
     /**
@@ -40,6 +49,10 @@ class StoreSettings
 
         foreach (self::BUSINESS as $key => [$code]) {
             $values[$key] = $this->read($code);
+        }
+
+        foreach (RetailerStanding::SETTINGS as $key => [, $default]) {
+            $values[$key] ??= (string) $default;
         }
 
         return array_merge($values, $this->company(), $this->bank());

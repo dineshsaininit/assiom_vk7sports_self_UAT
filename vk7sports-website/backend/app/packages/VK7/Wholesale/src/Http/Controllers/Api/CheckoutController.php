@@ -5,6 +5,7 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use VK7\Wholesale\Services\RetailerStanding;
 use Webkul\Checkout\Facades\Cart;
 use Webkul\Payment\Facades\Payment;
 use Webkul\Sales\Repositories\OrderRepository;
@@ -91,6 +92,18 @@ class CheckoutController extends Controller
 
         if (! $available) {
             return $this->fail(trans('That payment method is not available.'), 'INVALID_PAYMENT');
+        }
+
+        if ($data['method'] === 'cashondelivery') {
+            Cart::collectTotals();
+
+            $standing = app(RetailerStanding::class);
+
+            $cod = $standing->cod($standing->companyId($this->customer()->id), (float) Cart::getCart()->base_grand_total);
+
+            if (! $cod['eligible']) {
+                return $this->fail($cod['reason'], 'COD_NOT_AVAILABLE');
+            }
         }
 
         Cart::savePaymentMethod(['method' => $data['method']]);

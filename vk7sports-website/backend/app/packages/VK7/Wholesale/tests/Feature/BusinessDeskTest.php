@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use VK7\Wholesale\Couriers\DemoCourier;
 use VK7\Wholesale\Models\OrderTerm;
@@ -77,14 +79,16 @@ function payAdvance(array $retailer, int $orderId): void
 // Advance And Balance
 // ====================================================================
 
-it('asks for a ten percent advance and holds the rest until after delivery', function () {
+it('asks for a twenty percent advance on a prepaid order', function () {
     [$retailer, $orderId] = placedOrder();
 
     $finance = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->assertOk()->json('data.finance');
 
     expect($finance['stage'])->toBe('Awaiting advance')
         ->and($finance['payable'])->toBe('advance')
-        ->and($finance['advance_due'])->toEqual(round($finance['total'] * 0.1, 2))
+        ->and($finance['advance_due'])->toEqual(round($finance['total'] * 0.2, 2))
+        ->and($finance['payment_mode'])->toBe('prepaid')
+        ->and($finance['first_order'])->toBeTrue()
         ->and($finance['outstanding'])->toEqual($finance['total']);
 
     asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'balance'])
@@ -109,7 +113,7 @@ it('confirms the order only after a successful payment', function () {
 
     expect($finance['stage'])->toBe('Confirmed')
         ->and($finance['paid'])->toEqual($finance['advance_due'])
-        ->and($finance['payable'])->toBeNull();
+        ->and($finance['payable'])->toBe('balance');
 });
 
 it('reuses an open payment instead of opening a second one', function () {
@@ -290,10 +294,20 @@ it('uses the configured gateway implementation', function () {
 // Courier
 // ====================================================================
 
-it('dispatches, tracks and collects the balance after delivery', function () {
-    [$retailer, $orderId] = placedOrder();
+it('dispatches, tracks and collects the balance after delivery on cash on delivery', function () {
+    $retailer = retailer();
 
     $staff = staffToken();
+
+    $clientId = Customer::where('email', $retailer['email'])->value('id');
+
+    asStaff($staff, 'POST', "/api/v1/admin/clients/{$clientId}/standing", ['cod_override' => 'allow', 'note' => 'Known shop, vouched by sales'])->assertOk();
+
+    app('auth')->forgetGuards();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $orderId = checkout($retailer, 'cashondelivery')->assertCreated()->json('data.id');
 
     asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertStatus(422)->assertJsonPath('code', 'INVALID_STAGE');
 
@@ -302,6 +316,8 @@ it('dispatches, tracks and collects the balance after delivery', function () {
     asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/stage", ['stage' => 'Packing'])->assertOk();
 
     $order = asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertOk()->json('data');
+
+    expect($order['payment_mode'])->toBe('cod');
 
     expect($order['stage'])->toBe('Dispatched')
         ->and($order['tracking']['events'])->toHaveCount(1)
@@ -721,4 +737,200 @@ it('stores a bank reference for the amount the retailer chose', function () {
     ])->assertCreated();
 
     expect((float) Payment::where('order_id', $orderId)->value('amount'))->toEqual((float) $finance['total']);
+});
+
+// ====================================================================
+// Payment Policy And Retailer Debit Score
+// ====================================================================
+
+/**
+ * Set a payment policy value for the test.
+ */
+function setPolicy(string $code, string $value): void
+{
+    DB::table('core_config')->where('code', $code)->delete();
+
+    DB::table('core_config')->insert(['code' => $code, 'value' => $value, 'channel_code' => null, 'created_at' => now(), 'updated_at' => now()]);
+
+    Cache::flush();
+}
+
+/**
+ * The client account id behind a retailer.
+ */
+function clientId(array $retailer): int
+{
+    return Customer::where('email', $retailer['email'])->value('id');
+}
+
+it('blocks a dispatch until a prepaid order is paid in full', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    $staff = staffToken();
+
+    payAdvance($retailer, $orderId);
+
+    expect(asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance.payable'))->toBe('balance');
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/stage", ['stage' => 'Packing'])->assertOk();
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertStatus(422)->assertJsonPath('code', 'BALANCE_DUE');
+
+    $start = asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments", ['kind' => 'balance'])->assertCreated();
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/payments/{$start->json('data.payment_id')}/confirm", ['simulated_result' => 'success'])->assertOk();
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertOk()->assertJsonPath('data.stage', 'Dispatched');
+});
+
+it('refuses cash on delivery to a new retailer and asks a large first order to pay in full', function () {
+    setPolicy('vk7.risk.new_prepaid_above', '1');
+
+    $retailer = retailer();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $policy = asRetailer($retailer, 'GET', '/api/v1/checkout/policy')->assertOk()->json('data');
+
+    expect($policy['advance_percent'])->toEqual(100)
+        ->and($policy['first_order'])->toBeTrue()
+        ->and($policy['cod']['eligible'])->toBeFalse();
+
+    asRetailer($retailer, 'POST', '/api/v1/checkout/address', ['billing' => [
+        'first_name' => 'Test', 'last_name' => 'Retailer', 'email' => $retailer['email'], 'address' => ['1 Fictional Street'],
+        'city' => 'Mumbai', 'country' => 'IN', 'state' => 'MH', 'postcode' => '400001', 'phone' => '9876543210', 'use_for_shipping' => true,
+    ]])->assertOk();
+
+    asRetailer($retailer, 'POST', '/api/v1/checkout/shipping', ['shipping_method' => 'flatrate_flatrate'])->assertOk();
+
+    asRetailer($retailer, 'POST', '/api/v1/checkout/payment', ['method' => 'cashondelivery'])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'COD_NOT_AVAILABLE');
+
+    asRetailer($retailer, 'POST', '/api/v1/checkout/payment', ['method' => 'moneytransfer'])->assertOk();
+
+    $orderId = asRetailer($retailer, 'POST', '/api/v1/checkout/order')->assertCreated()->json('data.id');
+
+    $finance = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance');
+
+    expect($finance['advance_percent'])->toEqual(100)
+        ->and($finance['advance_due'])->toEqual($finance['total'])
+        ->and($finance['first_order'])->toBeTrue();
+});
+
+it('keeps part of the advance on a retailer cancellation, lowers the score and records the refund', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    payAdvance($retailer, $orderId);
+
+    $quote = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}/cancellation")->assertOk()->json('data');
+
+    $total = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance.total');
+
+    expect($quote['allowed'])->toBeTrue()
+        ->and($quote['deduction_percent'])->toEqual(5)
+        ->and($quote['deduction'])->toEqual(round($total * 0.05, 2))
+        ->and($quote['refund'])->toEqual(round($quote['paid'] - $quote['deduction'], 2))
+        ->and($quote)->not->toHaveKey('event');
+
+    asRetailer($retailer, 'POST', "/api/v1/orders/{$orderId}/cancel", ['reason' => 'Changed my mind', 'accept_deduction' => true])->assertOk();
+
+    $finance = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance');
+
+    expect($finance['stage'])->toBe('Cancelled')
+        ->and($finance['cancel_deduction'])->toEqual($quote['deduction'])
+        ->and($finance['refund_due'])->toEqual($quote['refund'])
+        ->and($finance['refund_status'])->toBe('pending');
+
+    $standing = asRetailer($retailer, 'GET', '/api/v1/account/standing')->assertOk()->json('data');
+
+    expect($standing['score'])->toBe(52)
+        ->and($standing['events'][0]['type'])->toBe('cancelled_after_advance')
+        ->and($standing['events'][0])->not->toHaveKey('actor');
+
+    asStaff(staffToken(['dashboard', 'orders']), 'POST', "/api/v1/admin/orders/{$orderId}/refund", ['reference' => 'UTR123'])->assertForbidden();
+
+    asStaff(staffToken(), 'POST', "/api/v1/admin/orders/{$orderId}/refund", ['reference' => 'UTR123'])
+        ->assertOk()
+        ->assertJsonPath('data.refund_status', 'refunded');
+});
+
+it('lets staff cancel for a business reason without any deduction or score change', function () {
+    [$retailer, $orderId] = placedOrder();
+
+    payAdvance($retailer, $orderId);
+
+    $paid = asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance.paid');
+
+    $order = asStaff(staffToken(), 'POST', "/api/v1/admin/orders/{$orderId}/cancel", ['reason' => 'Out of stock', 'fault' => 'business'])->assertOk()->json('data');
+
+    expect($order['cancel_deduction'])->toEqual(0)
+        ->and($order['refund_due'])->toEqual($paid)
+        ->and($order['client_score'])->toBe(60);
+});
+
+it('raises the advance for a high-risk retailer after a manual adjustment', function () {
+    $retailer = retailer();
+
+    $staff = staffToken();
+
+    asStaff($staff, 'POST', '/api/v1/admin/clients/'.clientId($retailer).'/standing', ['points' => -30])->assertUnprocessable();
+
+    $standing = asStaff($staff, 'POST', '/api/v1/admin/clients/'.clientId($retailer).'/standing', ['points' => -30, 'note' => 'Two cheques bounced'])->assertOk()->json('data');
+
+    expect($standing['score'])->toBe(30)
+        ->and($standing['tier'])->toBe('High risk')
+        ->and($standing['events'][0]['note'])->toBe('Two cheques bounced');
+
+    app('auth')->forgetGuards();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $orderId = checkout($retailer)->assertCreated()->json('data.id');
+
+    expect(asRetailer($retailer, 'GET', "/api/v1/orders/{$orderId}")->json('data.finance.advance_percent'))->toEqual(50);
+
+    expect(asStaff($staff, 'GET', '/api/v1/admin/dashboard')->json('data.highRiskClients'))->toBe(1);
+});
+
+it('returns a refused cash-on-delivery parcel and records it against the retailer', function () {
+    $retailer = retailer();
+
+    $staff = staffToken();
+
+    asStaff($staff, 'POST', '/api/v1/admin/clients/'.clientId($retailer).'/standing', ['cod_override' => 'allow', 'note' => 'Trusted by the owner'])->assertOk();
+
+    app('auth')->forgetGuards();
+
+    asRetailer($retailer, 'POST', '/api/v1/cart/items', ['lines' => lines('TEST-STYLE-02', [12, 12])])->assertSuccessful();
+
+    $orderId = checkout($retailer, 'cashondelivery')->assertCreated()->json('data.id');
+
+    payAdvance($retailer, $orderId);
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/stage", ['stage' => 'Packing'])->assertOk();
+
+    asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/dispatch")->assertOk();
+
+    $order = asStaff($staff, 'POST', "/api/v1/admin/orders/{$orderId}/cod-refused", ['note' => 'Shop refused the parcel'])->assertOk()->json('data');
+
+    expect($order['stage'])->toBe('Returned')
+        ->and($order['outstanding'])->toEqual(0)
+        ->and($order['client_score'])->toBe(40);
+});
+
+it('refuses odd ids and oversized bodies, and marks answers as private', function () {
+    $retailer = retailer();
+
+    expect(asRetailer($retailer, 'GET', '/api/v1/orders/1%20OR%201=1')->status())->toBeIn([401, 404]);
+
+    $response = asRetailer($retailer, 'GET', '/api/v1/account/standing')->assertOk();
+
+    expect($response->headers->get('Cache-Control'))->toContain('no-store')
+        ->and($response->headers->has('X-Built-With'))->toBeFalse();
+
+    app('auth')->forgetGuards();
+
+    test()->call('POST', '/api/v1/enquiries', [], [], [], ['CONTENT_TYPE' => 'application/json', 'CONTENT_LENGTH' => 600000], str_repeat('a', 600000))
+        ->assertStatus(413);
 });

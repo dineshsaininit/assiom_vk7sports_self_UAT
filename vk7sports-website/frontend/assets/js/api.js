@@ -154,7 +154,7 @@
     const reference = (o.comments || []).find(c => c.comment.startsWith('Retailer reference: '));
     return {
       id: o.id, number: o.order_number, type: 'standard', status, createdAt: o.created_at, subtotal: f.total, holdUntil: f.hold_until, advancePct: f.advance_percent, advanceDue: f.advance_due, balanceDue: f.balance_due,
-      paid: f.paid, outstanding: f.outstanding, payable: f.payable || null, minPayment: f.min_payment, gateway: f.gateway, payments: (f.payments || []).map(paymentView), tracking: o.tracking || null, artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
+      paid: f.paid, outstanding: f.outstanding, payable: f.payable || null, paymentMode: f.payment_mode || 'prepaid', balanceBeforeDispatch: f.balance_before_dispatch !== false, firstOrder: !!f.first_order, cancelledBy: f.cancelled_by || null, cancelDeduction: f.cancel_deduction, refundDue: f.refund_due, refundStatus: f.refund_status || null, minPayment: f.min_payment, gateway: f.gateway, payments: (f.payments || []).map(paymentView), tracking: o.tracking || null, artwork: null, quoteId: null, history, poRef: reference ? reference.comment.slice(20) : '', notes: '', company: '',
       address: o.address || { label: '', line1: '', city: '', state: '', pin: '', phone: '' },
       shipment: shipment ? { courier: shipment.carrier || '', lr: shipment.track_number || '', date: shipment.created_at, url: '' } : null,
       lines: (o.items || []).map(i => ({ productId: String(i.product_id), variantId: i.variant_id, name: i.name, style: i.sku, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty_ordered, unitPrice: i.price, image: PLACEHOLDER }))
@@ -307,10 +307,14 @@
       if (!c.lines.some(l => l.locked)) { await api.quotes.accept(quoteId); c = await getCart(); }
       if (c.lines.some(l => !l.locked)) throw new ApiError('Your order list has other items. Remove them before ordering from this quote.');
     }
-    const s = await api.settings(), advanceDue = Math.round(c.subtotal * s.advancePct) / 100;
-    return { quote, lines: c.lines, pieces: c.pieces, subtotal: c.subtotal, advancePct: s.advancePct, advanceDue, balanceDue: c.subtotal - advanceDue, holdHours: s.holdHours, addresses, violations: c.violations, shortages: c.shortages };
+    const s = await api.settings();
+    let policy = null;
+    try { policy = c.lines.length ? (await http('GET', '/checkout/policy')).data : null; } catch (e) { policy = null; }
+    const advancePct = policy ? policy.advance_percent : s.advancePct, advanceDue = Math.round(c.subtotal * advancePct) / 100;
+    return { quote, lines: c.lines, pieces: c.pieces, subtotal: c.subtotal, advancePct, advanceDue, balanceDue: c.subtotal - advanceDue, holdHours: s.holdHours, addresses, violations: c.violations, shortages: c.shortages,
+      policyNote: policy ? policy.note : null, firstOrder: policy ? policy.first_order : false, cod: policy ? policy.cod : { eligible: false, reason: '' } };
   };
-  api.checkout.place = async ({ addressId, poRef, notes, agree }) => {
+  api.checkout.place = async ({ addressId, poRef, notes, agree, paymentMode }) => {
     const fields = {};
     if (!addressId) fields.addressId = 'Choose a delivery address.';
     if (!agree) fields.agree = 'Please accept the order terms.';
@@ -322,7 +326,7 @@
     const rate = carriers.flatMap(c => c.rates).sort((x, y) => x.base_price - y.base_price)[0];
     if (!rate) throw new ApiError('No delivery method is available for this address. Please contact sales.');
     await http('POST', '/checkout/shipping', { shipping_method: rate.method });
-    await http('POST', '/checkout/payment', { method: 'moneytransfer' });
+    await http('POST', '/checkout/payment', { method: paymentMode === 'cod' ? 'cashondelivery' : 'moneytransfer' });
     const o = (await http('POST', '/checkout/order', { po_ref: poRef || null, notes: notes || null })).data;
     return { id: o.id, number: o.order_number };
   };
@@ -334,7 +338,8 @@
   api.orders.submitPayment = async (id, { kind, method, ref, amount }) => (await http('POST', '/orders/' + id + '/payments/reference', { kind, method, reference: ref, amount: amount ? Number(amount) : null }, { reference: 'ref' })).data;
   const invoiceView = i => ({ ...i, lines: i.lines.map(l => ({ ...l, colour: option(l, 'color'), size: option(l, 'size') })) });
   api.orders.invoice = async id => invoiceView((await http('GET', '/orders/' + id + '/invoice')).data);
-  api.orders.cancel = async (id, reason) => orderView((await http('POST', '/orders/' + id + '/cancel', { reason })).data);
+  api.orders.cancellation = async id => (await http('GET', '/orders/' + id + '/cancellation')).data;
+  api.orders.cancel = async (id, reason) => orderView((await http('POST', '/orders/' + id + '/cancel', { reason, accept_deduction: true })).data);
   api.orders.reorder = async id => {
     const o = await orderDetail(id);
     await http('POST', '/cart/items', { lines: o.lines.map(l => ({ product_id: Number(l.productId), variant_id: l.variantId, qty: l.qty })) });
@@ -352,6 +357,29 @@
   });
   api.enquiries.create = async v => ({ number: (await http('POST', '/enquiries', enquiryBody(v, v.type === 'custom' ? 'custom' : 'bulk'))).data.number });
   api.enquiries.contact = async v => ({ number: (await http('POST', '/enquiries', enquiryBody(v, 'contact'))).data.number });
+
+  /* Customer support tickets. Labels here are what customers and staff read. */
+  const SUPPORT_STATUS = { open: 'Received', in_progress: 'Being handled', resolved: 'Resolved', closed: 'Closed' };
+  const SUPPORT_CATEGORY = { order: 'Order problem', payment: 'Payment problem', delivery: 'Delivery or parcel', product: 'Product quality or size', account: 'Account or sign-in', website: 'Website problem', other: 'Something else' };
+  const SUPPORT_PRIORITY = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' };
+  const ticketView = t => ({
+    id: t.id, number: t.number, category: SUPPORT_CATEGORY[t.category] || t.category, categoryKey: t.category, orderNumber: t.order_number || '', subject: t.subject, message: t.message,
+    status: SUPPORT_STATUS[t.status] || t.status, statusKey: t.status, reply: t.reply || '', repliedAt: t.replied_at, contactBy: t.contact_by, createdAt: t.created_at, updatedAt: t.updated_at,
+    name: t.name, organisation: t.business_name || '', email: t.email || '', phone: t.phone || '', preferred: t.preferred_contact, priority: SUPPORT_PRIORITY[t.priority] || t.priority, priorityKey: t.priority,
+    assignedTo: t.assigned_to || '', notes: t.notes || [], overdue: !!t.overdue, resolvedAt: t.resolved_at
+  });
+  api.support = {
+    statuses: SUPPORT_STATUS, categories: SUPPORT_CATEGORY, priorities: SUPPORT_PRIORITY,
+    create: async v => {
+      const d = (await http('POST', '/support', {
+        name: v.name, business_name: v.business_name || null, email: v.email || null, phone: v.phone || null, preferred_contact: v.preferred_contact || null,
+        category: v.category, order_number: v.order_number || null, subject: v.subject, message: v.message
+      })).data;
+      return { ...ticketView(d), withinHours: d.contact_within_hours, preferred: d.preferred_contact };
+    },
+    check: async (number, contact) => ticketView((await http('POST', '/support/check', { number, contact })).data),
+    mine: async () => (await http('GET', '/support/mine')).data.map(ticketView)
+  };
   api.enquiries.mine = async () => (await http('GET', '/enquiries/mine')).data.filter(e => e.type !== 'retailer_application').map(e => ({ id: e.id, number: e.number, type: e.type, message: e.message, status: e.status === 'new' ? 'New' : e.status, createdAt: e.created_at }));
 
   api.account.get = async () => accountView((await http('GET', '/account')).data);
@@ -359,6 +387,7 @@
     const [orders, quotes] = await Promise.all([allOrders(), allQuotes()]);
     return { openOrders: orders.filter(o => !['Paid in full', 'Cancelled', 'Expired'].includes(o.status)).length, awaitingAdvance: orders.filter(o => o.status === 'Awaiting advance').length, quotesToReview: quotes.filter(q => q.status === 'Quote ready').length, balance: orders.reduce((s, o) => s + o.outstanding, 0), recent: orders.slice(0, 5), artwork: [] };
   };
+  api.account.standing = async () => (await http('GET', '/account/standing')).data;
   api.account.update = async v => { await http('PUT', '/account', { ...splitName(v.contact), phone: v.phone }, { first_name: 'contact', last_name: 'contact' }); };
   api.account.password = async ({ current, next, confirm }) => { await http('PUT', '/account/password', { current_password: current, password: next, password_confirmation: confirm }, { current_password: 'current', password: 'next', password_confirmation: 'confirm' }); };
   api.account.saveAddress = async v => { await http(v.id ? 'PUT' : 'POST', '/account/addresses' + (v.id ? '/' + v.id : ''), addressBody(v)); };
@@ -377,13 +406,13 @@
   /* --- Staff business desk --- */
   const rowView = r => ({ id: r.id, number: r.number, company: r.company, status: r.stage, stage: r.stage, createdAt: r.created_at, type: 'standard', subtotal: r.total, paid: r.paid, outstanding: r.outstanding, lines: [{ qty: r.pieces }], customerId: r.customer_id, address: { city: '' }, tracking: r.tracking || null, shipment: r.tracking ? { lr: r.tracking.waybill } : null });
   const staffOrder = o => ({
-    ...rowView({ ...o, stage: o.stage }), holdUntil: o.hold_until, advancePct: o.advance_percent, advanceDue: o.advance_due, balanceDue: o.balance_due, payments: (o.payments || []).map(paymentView),
+    ...rowView({ ...o, stage: o.stage }), paymentMode: o.payment_mode || 'prepaid', firstOrder: !!o.first_order, riskNote: o.risk_note || '', cancelledBy: o.cancelled_by || null, cancelDeduction: o.cancel_deduction, refundDue: o.refund_due, refundStatus: o.refund_status || null, refundRef: o.refund_reference || '', clientId: o.client_id, clientScore: o.client_score, clientTier: o.client_tier, payable: o.payable || null, holdUntil: o.hold_until, advancePct: o.advance_percent, advanceDue: o.advance_due, balanceDue: o.balance_due, payments: (o.payments || []).map(paymentView),
     address: o.address || { label: '', line1: '', city: '', state: '', pin: '', phone: '' }, artwork: null, designBrief: null, tracking: o.tracking,
     shipment: o.tracking ? { courier: o.tracking.courier, lr: o.tracking.waybill } : null,
     history: [{ status: 'Order placed', at: o.created_at, by: o.company, note: '' }, ...(o.payments || []).filter(p => p.status === 'verified').map(p => ({ status: (p.kind === 'advance' ? 'Advance' : 'Balance') + ' verified', at: p.created_at, by: p.reviewed_by, note: p.reference || '' })), ...((o.tracking && o.tracking.events) || []).map(e => ({ status: e.status, at: e.occurred_at, by: e.location, note: '' }))],
     lines: (o.items || []).map(i => ({ name: i.name, sku: i.sku, colour: option(i, 'color'), size: option(i, 'size'), qty: i.qty_ordered, unitPrice: i.price }))
   });
-  const clientRow = c => ({ id: c.id, status: c.status, company: c.company, contact: c.contact, email: c.email, phone: c.phone, city: '', appliedAt: c.applied_at, orders: c.orders, outstanding: c.outstanding || 0 });
+  const clientRow = c => ({ id: c.id, status: c.status, company: c.company, contact: c.contact, email: c.email, phone: c.phone, city: '', appliedAt: c.applied_at, orders: c.orders, outstanding: c.outstanding || 0, score: c.score, tier: c.tier });
 
   const QUOTE = { open: 'Quote requested', draft: 'Quote requested', negotiation: 'Quote ready', accepted: 'Accepted', ordered: 'Ordered', completed: 'Ordered', rejected: 'Declined', expired: 'Expired' };
   const deskQuote = q => ({
@@ -402,7 +431,7 @@
     },
     counts: async () => {
       const d = (await http('GET', '/admin/dashboard')).data;
-      return { retailers: d.pendingRetailers, payments: d.awaitingVerification, dispatch: d.readyToDispatch, quotes: d.openQuotes, enquiries: d.newEnquiries };
+      return { retailers: d.pendingRetailers, payments: d.awaitingVerification, dispatch: d.readyToDispatch, quotes: d.openQuotes, enquiries: d.newEnquiries, support: d.openSupport, refunds: d.refundsPending };
     },
     reports: async () => (await http('GET', '/admin/reports')).data,
     retailers: async () => (await http('GET', '/admin/clients')).data.map(clientRow),
@@ -410,13 +439,18 @@
       const c = (await http('GET', '/admin/clients/' + id)).data, a = c.addresses[0] || {};
       return { ...clientRow(c), city: a.city || '-', state: a.state || '-', shopType: '-', gstin: a.gstin || '', proof: '-', priceList: 'Standard', rejectReason: null, addresses: [{ line1: a.line1 || '-', city: a.city || '', pin: a.pin || '' }], orders: c.orders.map(rowView), statement: c.statement };
     },
+    standing: async id => (await http('GET', '/admin/clients/' + id + '/standing')).data,
+    updateStanding: async (id, { codOverride, points, note }) => (await http('POST', '/admin/clients/' + id + '/standing', { cod_override: codOverride || null, points: points ? Number(points) : null, note })).data,
     decideRetailer: async (id, { decision, reason }) => { await http('POST', '/admin/clients/' + id + '/decision', { decision, reason: reason || null }); },
     orders: async () => (await http('GET', '/admin/orders')).data.map(rowView),
     order: async id => staffOrder((await http('GET', '/admin/orders/' + id)).data),
     setOrderStatus: async (id, stage) => { await http('POST', '/admin/orders/' + id + '/stage', { stage }); },
     holdOrder: async (id, reason) => { await http('POST', '/admin/orders/' + id + '/hold', { reason }); },
     resumeOrder: async id => { await http('POST', '/admin/orders/' + id + '/resume'); },
-    cancelOrder: async (id, reason) => { await http('POST', '/admin/orders/' + id + '/cancel', { reason }); },
+    cancellation: async id => (await http('GET', '/admin/orders/' + id + '/cancellation')).data,
+    cancelOrder: async (id, reason, fault) => { await http('POST', '/admin/orders/' + id + '/cancel', { reason, fault: fault || 'retailer' }); },
+    codRefused: async (id, note) => { await http('POST', '/admin/orders/' + id + '/cod-refused', { note }); },
+    markRefunded: async (id, ref) => { await http('POST', '/admin/orders/' + id + '/refund', { reference: ref }, { reference: 'ref' }); },
     recordBalance: async (id, { amount, method, ref }) => { await http('POST', '/admin/orders/' + id + '/collection', { amount, method, reference: ref }, { reference: 'ref' }); },
     bookCourier: async id => { await http('POST', '/admin/orders/' + id + '/dispatch'); },
     refreshShipment: async id => { await http('POST', '/admin/shipments/' + id + '/refresh'); },
@@ -454,6 +488,8 @@
     acceptQuote: async (id, amount) => { await http('POST', '/admin/quotes/' + id + '/accept', { amount: Number(amount) }); },
     rejectQuote: async id => { await http('POST', '/admin/quotes/' + id + '/reject'); },
 
+    support: async () => { const r = await http('GET', '/admin/support'); return { list: r.data.map(ticketView), meta: r.meta }; },
+    updateTicket: async (id, v) => ticketView((await http('PUT', '/admin/support/' + id, { status: v.status, priority: v.priority, assigned_to: v.assignedTo || null, reply: v.reply || null, note: v.note || null })).data),
     enquiries: async () => (await http('GET', '/admin/enquiries')).data.map(deskEnquiry),
     updateEnquiry: async (id, { status, note, followUp }) => { await http('PUT', '/admin/enquiries/' + id, { status: Object.keys(ENQUIRY).find(k => ENQUIRY[k] === status), note: note || null, follow_up_on: followUp ? followUp.slice(0, 10) : null }); },
 

@@ -46,6 +46,7 @@
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
     shield: '<path d="M12 3 4 6v6c0 5 3.500 8 8 9 4.500-1 8-4 8-9V6z"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.500 9.200a2.600 2.600 0 0 1 5 .800c0 1.800-2.500 2.300-2.500 4"/><path d="M12 17v.5"/>',
     alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>',
     star: '<path d="m12 3 2.700 5.700 6.300.800-4.600 4.300 1.200 6.200L12 17l-5.600 3 1.200-6.200L3 9.500l6.300-.800z"/>'
   };
@@ -54,7 +55,7 @@
   /* --- Small components --- */
   const STATUS_TONE = {
     'Paid in full': 'ok', Delivered: 'ok', Confirmed: 'ok', Approved: 'ok', approved: 'ok', verified: 'ok', Accepted: 'ok', Ordered: 'ok', Won: 'ok', 'Production authorised': 'ok', 'Artwork approved': 'ok', Active: 'ok',
-    'Awaiting advance': 'warn', 'Awaiting balance': 'warn', 'Quote ready': 'warn', 'Artwork awaiting approval': 'warn', pending: 'warn', Pending: 'warn', submitted: 'warn', 'On hold': 'warn', 'In follow-up': 'warn', Quoted: 'warn',
+    'Awaiting advance': 'warn', 'Awaiting balance': 'warn', 'Quote ready': 'warn', 'Artwork awaiting approval': 'warn', pending: 'warn', Pending: 'warn', submitted: 'warn', 'On hold': 'warn', 'In follow-up': 'warn', 'Being handled': 'warn', Received: 'info', Resolved: 'ok', Returned: 'bad', 'Refund pending': 'warn', Refunded: 'ok', Urgent: 'bad', High: 'warn', Quoted: 'warn',
     Closed: 'mute', Cancelled: 'bad', Expired: 'bad', rejected: 'bad', Rejected: 'bad', Declined: 'bad', suspended: 'bad', Suspended: 'bad', Lost: 'bad', Inactive: 'bad',
     New: 'info', 'Quote requested': 'info', Packing: 'info', Dispatched: 'info', 'In production': 'info', 'Partly dispatched': 'info'
   };
@@ -401,7 +402,7 @@
   };
 
   /* --- Public chrome --- */
-  const PUBLIC_NAV = [['Catalogue', 'catalogue.html'], ['How it works', 'how-it-works.html'], ['Customised orders', 'custom-orders.html'], ['Bulk enquiry', 'enquiry.html'], ['About', 'about.html'], ['Contact', 'contact.html']];
+  const PUBLIC_NAV = [['Catalogue', 'catalogue.html'], ['How it works', 'how-it-works.html'], ['Customised orders', 'custom-orders.html'], ['Bulk enquiry', 'enquiry.html'], ['Support', 'support.html'], ['About', 'about.html'], ['Contact', 'contact.html']];
   const here = () => (location.pathname.split('/').pop() || 'index.html');
   const current = href => here() === href ? raw('aria-current="page"') : '';
 
@@ -416,7 +417,7 @@
     return html`
     <header class="hdr no-print"><div class="wrap hdr-in">
       <button class="tool burger" type="button" aria-label="Open menu" data-open-menu>${icon('menu', 22)}</button>
-      <a class="logo" href="index.html" aria-label="VK7SPORTS home"><img src="assets/img/brand/logo-white.png" alt="VK7SPORTS, sportswear for champions" width="179" height="34"></a>
+      <a class="logo" href="index.html" aria-label="VK7SPORTS home"><img src="assets/img/brand/logo-white.png" alt="VK7SPORTS, sportswear for champions" width="64" height="58"></a>
       <nav class="nav" aria-label="Main">${PUBLIC_NAV.map(n => html`<a href="${n[1]}" ${current(n[1])}>${n[0]}</a>`)}</nav>
       <form class="hdr-search" role="search" action="catalogue.html"><label class="sr" for="site-q">Search products</label>${icon('search')}<input id="site-q" name="q" type="search" placeholder="Search products" value="${param('q') || ''}"></form>
       <div class="hdr-tools">
@@ -436,7 +437,7 @@
       <div class="ftr-grid">
         <div><img class="ftr-logo" src="assets/img/brand/logo-white.png" alt="VK7SPORTS"><p>Wholesale sportswear for approved retailers and shopkeepers.</p></div>
         <div><h4>Shop</h4><ul><li><a href="catalogue.html">Catalogue</a></li><li><a href="register.html">Apply for a trade account</a></li><li><a href="quick-order.html">Quick order</a></li><li><a href="track.html">Track an order</a></li></ul></div>
-        <div><h4>Company</h4><ul><li><a href="about.html">About VK7SPORTS</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="custom-orders.html">Customised orders</a></li><li><a href="enquiry.html">Bulk enquiry</a></li><li><a href="faq.html">FAQs</a></li><li><a href="contact.html">Contact</a></li></ul></div>
+        <div><h4>Company</h4><ul><li><a href="about.html">About VK7SPORTS</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="custom-orders.html">Customised orders</a></li><li><a href="enquiry.html">Bulk enquiry</a></li><li><a href="faq.html">FAQs</a></li><li><a href="support.html">Customer support</a></li><li><a href="contact.html">Contact</a></li></ul></div>
         <div><h4>Policies</h4><ul><li><a href="policy.html?doc=terms">Terms of sale</a></li><li><a href="policy.html?doc=shipping">Shipping</a></li><li><a href="policy.html?doc=returns">Returns and replacements</a></li><li><a href="policy.html?doc=privacy">Privacy</a></li></ul></div>
       </div>
       <div class="ftr-base"><span>© ${new Date().getFullYear()} ${C.legalName || 'VK7SPORTS'}. All rights reserved.</span><span>${C.gstin ? 'GSTIN ' + C.gstin : ''}</span><a href="admin-login.html">Staff sign-in</a></div>
@@ -452,11 +453,11 @@
   };
 
   const SIDE = [
-    ['Overview', 'account.html', 'home'], ['My orders', 'account-orders.html', 'box'], ['My quotes', 'account-quotes.html', 'file'], ['Enquiries', 'account-enquiries.html', 'mail'],
+    ['Overview', 'account.html', 'home'], ['My orders', 'account-orders.html', 'box'], ['My quotes', 'account-quotes.html', 'file'], ['Enquiries', 'account-enquiries.html', 'mail'], ['Support tickets', 'account-support.html', 'help'],
     ['Account statement', 'account-statement.html', 'rupee'], ['Notifications', 'account-notifications.html', 'bell'], ['Shop profile', 'account-profile.html', 'user'], ['Addresses', 'account-addresses.html', 'truck'], ['Shop logins', 'account-users.html', 'users']
   ];
   const ADMIN_SIDE = [
-    ['Work', [['Dashboard', 'admin.html', 'home', 'dashboard'], ['Clients', 'admin-retailers.html', 'users', 'retailers', 'retailers'], ['Enquiries', 'admin-enquiries.html', 'mail', 'enquiries', 'enquiries'], ['Quotes', 'admin-quotes.html', 'file', 'quotes', 'quotes'], ['Orders', 'admin-orders.html', 'box', 'orders']]],
+    ['Work', [['Dashboard', 'admin.html', 'home', 'dashboard'], ['Clients', 'admin-retailers.html', 'users', 'retailers', 'retailers'], ['Enquiries', 'admin-enquiries.html', 'mail', 'enquiries', 'enquiries'], ['Customer support', 'admin-support.html', 'help', 'support', 'support'], ['Quotes', 'admin-quotes.html', 'file', 'quotes', 'quotes'], ['Orders', 'admin-orders.html', 'box', 'orders']]],
     ['Money and dispatch', [['Payments', 'admin-payments.html', 'rupee', 'payments', 'payments'], ['Dispatch', 'admin-dispatch.html', 'truck', 'dispatch', 'dispatch']]],
     ['Catalogue', [['Products', 'admin-products.html', 'layers', 'products'], ['Inventory', 'admin-inventory.html', 'list', 'inventory']]],
     ['Business', [['Business overview', 'admin-reports.html', 'chart', 'reports'], ['Notifications', 'admin-notifications.html', 'bell', 'notifications'], ['Staff and roles', 'admin-staff.html', 'shield', 'staff'], ['Settings', 'admin-settings.html', 'gear', 'settings'], ['Activity log', 'admin-audit.html', 'list', 'audit']]]

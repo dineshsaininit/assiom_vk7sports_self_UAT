@@ -21,6 +21,14 @@ class OrderTerm extends Model
     protected $fillable = [
         'order_id',
         'stage',
+        'payment_mode',
+        'first_order',
+        'risk_note',
+        'cancelled_by',
+        'cancel_deduction',
+        'refund_due',
+        'refund_status',
+        'refund_reference',
         'previous_stage',
         'advance_percent',
         'advance_due',
@@ -36,6 +44,9 @@ class OrderTerm extends Model
      * @var array
      */
     protected $casts = [
+        'first_order' => 'boolean',
+        'cancel_deduction' => 'float',
+        'refund_due' => 'float',
         'advance_percent' => 'float',
         'advance_due' => 'float',
         'total' => 'float',

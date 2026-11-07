@@ -4,6 +4,7 @@ namespace VK7\Wholesale\Http\Controllers\Api;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use VK7\Wholesale\Exceptions\BusinessRuleException;
 use VK7\Wholesale\Services\InvoiceDesk;
 use VK7\Wholesale\Services\OrderFinance;
 use VK7\Wholesale\Services\ShipmentDesk;
@@ -114,31 +115,58 @@ class OrderController extends Controller
     }
 
     /**
-     * Cancel an order that has not started moving.
+     * What cancelling now would cost, under the cancellation policy.
      */
-    public function cancel(Request $request, int $id): JsonResponse
+    public function cancellation(int $id): JsonResponse
     {
-        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+        $order = $this->ownOrder($id);
 
-        $order = $this->orderRepository->find($id);
-
-        if (
-            ! $order
-            || ! in_array($order->customer_id, $this->buyerIds())
-        ) {
+        if (! $order) {
             return $this->fail(trans('Order not found.'), 'NOT_FOUND', 404);
         }
 
-        if (
-            $order->status !== 'pending'
-            || ! $this->orderRepository->cancel($order)
-        ) {
-            return $this->fail(trans('This order can no longer be cancelled online. Please contact sales.'), 'CANNOT_CANCEL');
+        $quote = $this->finance->cancellationQuote($order);
+
+        unset($quote['event']);
+
+        return response()->json(['data' => $quote]);
+    }
+
+    /**
+     * Cancel an order that has not been dispatched, applying the cancellation policy.
+     */
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+            'accept_deduction' => ['accepted'],
+        ]);
+
+        $order = $this->ownOrder($id);
+
+        if (! $order) {
+            return $this->fail(trans('Order not found.'), 'NOT_FOUND', 404);
+        }
+
+        try {
+            $this->finance->cancel($order, $data['reason'], 'Retailer: '.$this->customer()->email, 'retailer');
+        } catch (BusinessRuleException $e) {
+            return $this->fail($e->getMessage() === trans('This order can no longer be cancelled.') ? trans('This order can no longer be cancelled online. Please contact sales.') : $e->getMessage(), $e->errorCode, $e->status);
         }
 
         $order->comments()->create(['comment' => 'Cancelled by retailer: '.$data['reason'], 'customer_notified' => 0]);
 
         return $this->show($id);
+    }
+
+    /**
+     * The retailer's own order, or null.
+     */
+    protected function ownOrder(int $id)
+    {
+        $order = $this->orderRepository->find($id);
+
+        return $order && in_array($order->customer_id, $this->buyerIds()) ? $order : null;
     }
 
     /**

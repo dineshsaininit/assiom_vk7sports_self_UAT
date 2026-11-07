@@ -38,6 +38,9 @@
           ${tile('Clients to approve', d.pendingRetailers, 'admin-retailers.html', null, 'retailers')}
           ${tile('Quotes to answer', d.openQuotes, 'admin-quotes.html', null, 'quotes')}
           ${tile('New enquiries', d.newEnquiries, 'admin-enquiries.html', null, 'enquiries')}
+          ${tile('Support tickets open', d.openSupport, 'admin-support.html', null, 'support')}
+          ${tile('Refunds to pay', d.refundsPending, 'admin-orders.html', null, 'payments')}
+          ${tile('High-risk retailers', d.highRiskClients, 'admin-retailers.html', 'Payment score below 40', 'retailers')}
           ${tile('Ready to dispatch', d.readyToDispatch, 'admin-dispatch.html', null, 'dispatch')}
           ${tile('Low stock sizes', d.lowStockCount, 'admin-inventory.html', null, 'inventory')}
         </div>
@@ -54,15 +57,22 @@
     const list = (await api.admin.retailers()).sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
     listing(main, title('Clients', 'Every retailer, what they have ordered and what they owe.'), filterBar('Search shop, contact or email', ['pending', 'approved', 'rejected', 'suspended']), (q, s) => {
       const r = list.filter(x => (!s || x.status === s) && [x.company, x.city, x.email, x.contact].join(' ').toLowerCase().includes(q));
-      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Shop</th><th>City</th><th>Applied</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>${r.map(x => html`<tr class="click" data-href="admin-retailer.html?id=${x.id}"><td><a href="admin-retailer.html?id=${x.id}"><strong>${x.company}</strong></a><div class="small muted">${x.contact}</div></td><td>${x.city}</td><td>${date(x.appliedAt)}</td><td class="num">${x.orders}</td><td class="num">${money(x.outstanding)}</td><td>${badge(x.status)}</td></tr>`)}</tbody></table></div>` : '';
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Shop</th><th>City</th><th>Applied</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Payment score</th><th>Status</th></tr></thead><tbody>${r.map(x => html`<tr class="click" data-href="admin-retailer.html?id=${x.id}"><td><a href="admin-retailer.html?id=${x.id}"><strong>${x.company}</strong></a><div class="small muted">${x.contact}</div></td><td>${x.city}</td><td>${date(x.appliedAt)}</td><td class="num">${x.orders}</td><td class="num">${money(x.outstanding)}</td><td>${scoreBadge(x.score, x.tier)}</td><td>${badge(x.status)}</td></tr>`)}</tbody></table></div>` : '';
     }, empty('No retailers found', 'Try a different search.', null, 'users'));
   });
+
+  const TIER_TONE = { Excellent: 'ok', Good: 'ok', Watch: 'warn', 'High risk': 'bad' };
+  const scoreBadge = (score, tier) => score == null ? '-' : html`<span class="badge b-${TIER_TONE[tier] || 'mute'}">${score} · ${tier}</span>`;
+  const standingPanel = (st, can) => html`<div class="card card-pad"><div class="row between mb"><h3>Payment standing</h3>${can ? html`<button class="btn btn-line btn-sm" data-standing>Change</button>` : ''}</div>
+    <div class="standing-in"><div class="score-ring" style="--p:${st.score}"><strong>${st.score}</strong><span>${st.tier}</span></div>
+    <dl class="kv"><dt>Orders paid in full</dt><dd>${st.completed_orders}</dd><dt>Advance asked</dt><dd>From ${st.advance_percent}%</dd><dt>Cash on delivery</dt><dd>${st.cod.eligible ? html`<span class="badge b-ok">Allowed</span>` : html`<span class="badge b-mute">Not allowed</span>`} <span class="small muted">${st.cod_override === 'auto' ? st.cod.reason : 'Set by staff: ' + (st.cod_override === 'allow' ? 'always allow' : 'never allow')}</span></dd></dl></div>
+    ${st.events.length ? html`<div class="tw mt"><table class="t"><thead><tr><th>When</th><th>What happened</th><th>Order</th><th>By</th><th class="num">Points</th></tr></thead><tbody>${st.events.map(e => html`<tr><td class="nowrap">${date(e.created_at)}</td><td>${e.label}${e.note ? html`<div class="small muted">${e.note}</div>` : ''}</td><td class="mono small">${e.order_number || '-'}</td><td class="small">${e.actor || ''}</td><td class="num ${e.points < 0 ? 'neg' : 'pos'}">${e.points > 0 ? '+' : ''}${e.points}</td></tr>`)}</tbody></table></div>` : html`<p class="small muted mt mb-0">No score changes yet. Every retailer starts at 60.</p>`}</div>`;
 
   page('admin-retailer', { layout: 'admin', access: 'staff:retailers' }, async (main, { me }) => {
     const id = param('id');
     const can = allowed(me, 'Owner', 'Sales', 'Administrator');
     const render = async () => {
-      const r = await api.admin.retailer(id);
+      const [r, st] = await Promise.all([api.admin.retailer(id), api.admin.standing(id)]);
       main.innerHTML = html`<a class="link small" href="admin-retailers.html">Back to clients</a>
       ${title(r.company, r.city + ', ' + r.state, badge(r.status))}
       <div class="stack">
@@ -72,9 +82,18 @@
         ${r.rejectReason ? notice('warn', 'Reason recorded', r.rejectReason) : ''}
         <div class="two"><div class="card card-pad"><h3 class="mb">Business</h3><dl class="kv"><dt>Type</dt><dd>${r.shopType}</dd><dt>GSTIN</dt><dd>${r.gstin || '-'}</dd><dt>Proof</dt><dd>${r.proof}</dd><dt>Price list</dt><dd>${r.priceList}</dd><dt>Applied</dt><dd>${date(r.appliedAt)}</dd></dl></div>
         <div class="card card-pad"><h3 class="mb">Contact</h3><dl class="kv"><dt>Person</dt><dd>${r.contact}</dd><dt>Mobile</dt><dd>${r.phone}</dd><dt>Email</dt><dd>${r.email}</dd><dt>Address</dt><dd>${r.addresses[0].line1}, ${r.addresses[0].city} ${r.addresses[0].pin}</dd></dl></div></div>
+        ${standingPanel(st, can)}
         <div class="card"><div class="card-head"><h3>Orders</h3><span class="small muted">Balance ${money(r.statement.balance)}</span></div>${r.orders.length ? html`<div class="tw"><table class="t"><tbody>${r.orders.map(o => html`<tr class="click" data-href="admin-order.html?id=${o.id}"><td class="mono">${o.number}</td><td>${date(o.createdAt)}</td><td>${badge(o.status)}</td><td class="num">${money(o.subtotal)}</td></tr>`)}</tbody></table></div>` : empty('No orders yet', 'Orders from this retailer will show here.')}</div>
       </div>`;
     };
+    on(main, '[data-standing]', async () => {
+      const st = await api.admin.standing(id);
+      modal('Change payment standing', html`<form class="form" novalidate>
+        ${field('codOverride', 'Cash on delivery', { type: 'select', value: st.cod_override, options: [['auto', 'Automatic, from the score and history'], ['allow', 'Always allow for this retailer'], ['block', 'Never allow for this retailer']] })}
+        ${field('points', 'Adjust the score (points, optional)', { type: 'number', min: -50, max: 50, hint: 'For example -10 for a bounced cheque, or 10 for a long and reliable history.' })}
+        ${field('note', 'Reason', { type: 'textarea', required: true, rows: 2, hint: 'Saved with the change and in the activity log.' })}
+        <button class="btn btn-red" type="submit">Save</button></form>`, async v => { await api.admin.updateStanding(id, v); toast('Standing updated'); await render(); });
+    });
     on(main, '[data-decide]', el => {
       const d = el.dataset.decide;
       if (d === 'approved') confirmBox('Approve this retailer?', 'They will be able to see trade prices and place orders.', 'Approve', async () => { await api.admin.decideRetailer(id, { decision: d }); toast('Retailer approved'); await render(); });
@@ -163,20 +182,24 @@
       if (o.status === 'Awaiting balance' && o.outstanding === 0 && is('Owner', 'Warehouse')) actions.push(html`<button class="btn btn-red" data-ship>Dispatch order</button>`);
       if (o.artwork?.status === 'changes' && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-red" data-art>Send new proof</button>`);
       if (['Delivered', 'Dispatched'].includes(o.status) && o.outstanding > 0 && is('Owner', 'Finance')) actions.push(html`<button class="btn btn-navy" data-balance>Record balance</button>`);
+      if (['Dispatched', 'Delivered'].includes(o.status) && o.paymentMode === 'cod' && o.outstanding > 0 && is('Owner', 'Warehouse', 'Sales')) actions.push(html`<button class="btn btn-danger" data-refused>Parcel refused</button>`);
+      if (o.refundStatus === 'pending' && is('Owner', 'Finance')) actions.push(html`<button class="btn btn-navy" data-refund>Record refund paid</button>`);
       if (o.status === 'On hold') actions.push(html`<button class="btn btn-navy" data-resume>Resume order</button>`);
-      else if (!['Delivered', 'Paid in full', 'Cancelled', 'Expired'].includes(o.status)) actions.push(html`<button class="btn btn-line" data-hold>Put on hold</button>`);
-      if (!['Dispatched', 'Delivered', 'Paid in full', 'Cancelled', 'Expired'].includes(o.status) && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-danger" data-cancel>Cancel order</button>`);
+      else if (!['Delivered', 'Paid in full', 'Cancelled', 'Expired', 'Returned'].includes(o.status)) actions.push(html`<button class="btn btn-line" data-hold>Put on hold</button>`);
+      if (['Awaiting advance', 'Confirmed', 'Packing'].includes(o.status) && is('Owner', 'Sales')) actions.push(html`<button class="btn btn-danger" data-cancel>Cancel order</button>`);
 
       main.innerHTML = html`<a class="link small" href="admin-orders.html">Back to orders</a>
       ${title(o.number, o.company + ' · ' + date(o.createdAt), html`<div class="row">${badge(o.status)}<a class="btn btn-line btn-sm" href="admin-invoice.html?id=${o.id}">View invoice</a></div>`)}
       <div class="stack">
+        ${o.firstOrder || o.riskNote ? notice('warn', o.firstOrder ? 'First order from this retailer' : 'Payment risk', o.riskNote || 'Check the details before packing.') : ''}
         <div class="card card-pad">${tracker(o)}${actions.length ? html`<div class="row mt-l">${actions}</div>` : ''}</div>
         ${o.tracking ? trackingPanel(o.tracking) : ''}
         ${o.designBrief ? notice('info', 'Design brief', o.designBrief) : ''}
         ${o.artwork ? html`<div class="card card-pad"><h3 class="mb">Artwork, version ${o.artwork.version}</h3><div class="row" style="align-items:flex-start;flex-wrap:nowrap"><img src="${o.artwork.image}" alt="Artwork proof" width="96" height="120" style="object-fit:cover;border-radius:4px"><div><p class="mb-0">${o.artwork.note}</p><p class="small muted mb-0">${o.artwork.status === 'awaiting' ? 'Waiting for the retailer' : o.artwork.reply}</p></div></div></div>` : ''}
         <div class="card"><div class="card-head"><h3>Items (${pcs(o.lines)} pieces)</h3></div><div class="tw"><table class="t"><thead><tr><th>Item</th><th>Colour</th><th>Size</th><th class="num">Pieces</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>${o.lines.map(l => html`<tr><td>${l.name}<div class="small muted mono">${l.sku}</div></td><td>${l.colour}</td><td>${l.size}</td><td class="num">${l.qty}</td><td class="num">${money(l.unitPrice)}</td><td class="num">${money(l.qty * l.unitPrice)}</td></tr>`)}</tbody></table></div></div>
         <div class="two">
-          <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Order value</span><span>${money(o.subtotal)}</span></div><div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Verified payments</span><span>${money(o.paid)}</span></div><div class="tot"><span>Outstanding</span><span>${money(o.outstanding)}</span></div></div>
+          <div class="card card-pad"><h3 class="mb">Money</h3><div class="sum"><div><span>Payment</span><span>${o.paymentMode === 'cod' ? 'Cash on delivery for the balance' : 'Prepaid: balance before dispatch'}</span></div><div><span>Retailer score</span><span><a class="link" href="admin-retailer.html?id=${o.clientId}">${scoreBadge(o.clientScore, o.clientTier)}</a></span></div><div><span>Order value</span><span>${money(o.subtotal)}</span></div><div><span>Advance (${o.advancePct}%)</span><span>${money(o.advanceDue)}</span></div><div><span>Verified payments</span><span>${money(o.paid)}</span></div><div class="tot"><span>Outstanding</span><span>${money(o.outstanding)}</span></div>
+            ${o.refundDue != null ? html`<div><span>Cancellation charge (${o.cancelledBy === 'business' ? 'business reason' : 'retailer'})</span><span>${money(o.cancelDeduction || 0)}</span></div><div><span>Refund due</span><span>${money(o.refundDue)} ${o.refundStatus ? badge(o.refundStatus === 'refunded' ? 'Refunded' : 'Refund pending') : ''}</span></div>` : ''}</div>
             ${o.payments.map(p => html`<div class="row between small mt"><span class="mono">${p.ref}</span><span>${money(p.amount)}</span>${badge(p.status)}</div>`)}</div>
           <div class="card card-pad"><h3 class="mb">Delivery</h3><p>${o.address.label}<br><span class="muted">${o.address.line1}, ${o.address.city}, ${o.address.state} ${o.address.pin}<br>${o.address.phone}</span></p>${o.shipment ? html`<dl class="kv"><dt>Courier</dt><dd>${o.shipment.courier}</dd><dt>LR number</dt><dd class="mono">${o.shipment.lr}</dd></dl>` : ''}</div>
         </div>
@@ -197,7 +220,16 @@
     });
     on(main, '[data-hold]', () => reasonBox('Put order on hold', 'The reason is saved on the order.', 'Put on hold', async r => { await api.admin.holdOrder(id, r); await render(); }));
     on(main, '[data-resume]', () => act(() => api.admin.resumeOrder(id), 'Order resumed').then(render));
-    on(main, '[data-cancel]', () => reasonBox('Cancel order', 'Held stock will be released. The reason is saved on the order.', 'Cancel order', async r => { await api.admin.cancelOrder(id, r); await render(); }));
+    on(main, '[data-cancel]', () => act(() => api.admin.cancellation(id)).then(q => {
+      modal('Cancel order', html`<form class="form" novalidate>
+        ${field('fault', 'Why is it being cancelled?', { type: 'select', required: true, options: [['retailer', 'The retailer asked to cancel (policy charge applies)'], ['business', 'Our reason, for example stock or a mistake (no charge)']] })}
+        <div class="sum"><div><span>Paid so far</span><span>${money(q.paid)}</span></div><div><span>Charge if the retailer cancels (${q.deduction_percent}%, score ${q.score})</span><span>${money(q.deduction)}</span></div><div class="tot"><span>Refund if the retailer cancels</span><span>${money(q.refund)}</span></div></div>
+        <p class="small muted mb-0">For our own reasons nothing is charged, the full ${money(q.paid)} is refunded and the score is not changed.</p>
+        ${field('reason', 'Reason', { type: 'textarea', required: true, rows: 2 })}
+        <div class="row between"><button type="button" class="btn btn-line" data-close>Go back</button><button type="submit" class="btn btn-danger">Cancel order</button></div></form>`, async v => { await api.admin.cancelOrder(id, v.reason, v.fault); toast('Order cancelled'); await render(); });
+    }).catch(() => {}));
+    on(main, '[data-refused]', () => reasonBox('Parcel refused', 'The order is marked returned, the policy charge is kept from the advance and the retailer\'s score drops by 20. Add the stock back from Inventory when the parcel arrives.', 'Mark as refused', async r => { await api.admin.codRefused(id, r); toast('Marked as refused'); await render(); }));
+    on(main, '[data-refund]', () => modal('Record refund paid', html`<form class="form" novalidate>${field('ref', 'Bank or UPI reference', { required: true, maxlength: 100 })}<button class="btn btn-red" type="submit">Save</button></form>`, async v => { await api.admin.markRefunded(id, v.ref); toast('Refund recorded'); await render(); }));
     await render();
   });
 
@@ -359,8 +391,17 @@
       ${checkbox('moqEnabled', 'Check the minimum order on every order and quote', { checked: s.moqEnabled })}
       <div class="form-2">${field('moq', 'Minimum pieces', { type: 'number', required: true, value: s.moq, min: 1 })}${field('moqMode', 'Count it', { type: 'select', value: s.moqMode, options: [['per_style', 'Per style: sizes and colours count together'], ['per_variant', 'Per size and colour'], ['per_order', 'Across the whole order']] })}</div>
       <h3>Payments and stock</h3>
-      <div class="form-2">${field('advancePct', 'Advance required (%)', { type: 'number', required: true, value: s.advancePct, min: 0, max: 100 })}${field('holdHours', 'Stock hold (hours)', { type: 'number', required: true, value: s.holdHours })}</div>
+      <div class="form-2">${field('advancePct', 'Advance required (%)', { type: 'number', required: true, value: s.advancePct, min: 20, max: 100, hint: 'At least 20%, as advised by our CA.' })}${field('holdHours', 'Stock hold (hours)', { type: 'number', required: true, value: s.holdHours })}</div>
       <div class="form-2">${field('quoteValidityDays', 'Quote valid for (days)', { type: 'number', required: true, value: s.quoteValidityDays })}${field('lowStock', 'Low-stock alert (pieces)', { type: 'number', required: true, value: s.lowStock ?? 20 })}</div>
+      <h3>New retailers</h3><p class="hint mb-0">Extra care on first orders, depending on the order value.</p>
+      <div class="form-2">${field('newMidValue', 'Higher advance above (₹)', { type: 'number', required: true, value: s.newMidValue, min: 0 })}${field('newMidPct', 'Higher advance (%)', { type: 'number', required: true, value: s.newMidPct, min: 20, max: 100 })}</div>
+      ${field('newPrepaidAbove', 'Full payment before dispatch above (₹)', { type: 'number', required: true, value: s.newPrepaidAbove, min: 0 })}
+      <h3>Cash on delivery</h3><p class="hint mb-0">Offered for the balance only, and only to retailers who meet all three rules. Staff can allow or block it for one retailer on the client page.</p>
+      <div class="form-2">${field('codMinScore', 'Minimum payment score', { type: 'number', required: true, value: s.codMinScore, min: 0, max: 100 })}${field('codMinOrders', 'Orders paid in full first', { type: 'number', required: true, value: s.codMinOrders, min: 0 })}</div>
+      ${field('codMaxOrder', 'Largest order on cash on delivery (₹)', { type: 'number', required: true, value: s.codMaxOrder, min: 0 })}
+      <h3>Cancellations and late payment</h3><p class="hint mb-0">Charge as a percent of the order value. It is halved for an Excellent score, and 1.5 or 2 times for Watch or High risk. It never exceeds what was paid.</p>
+      <div class="form-2">${field('cancelConfirmedPct', 'After the advance (%)', { type: 'number', required: true, value: s.cancelConfirmedPct, min: 0, max: 50 })}${field('cancelPackingPct', 'While packing, or parcel refused (%)', { type: 'number', required: true, value: s.cancelPackingPct, min: 0, max: 50 })}</div>
+      ${field('lateDays', 'Balance counts as late after (days)', { type: 'number', required: true, value: s.lateDays, min: 1, max: 90 })}
       <h3>Invoices</h3>
       ${checkbox('taxInvoiceApproved', 'Our chartered accountant has approved this invoice format as a tax invoice', { checked: s.taxInvoiceApproved })}
       <div><button class="btn btn-red" type="submit">Save settings</button></div></form></div></div>`;
@@ -376,5 +417,36 @@
   page('admin-audit', { layout: 'admin', access: 'staff:audit' }, async main => {
     const list = await api.admin.audit();
     main.innerHTML = html`${title('Activity log', 'Who changed what, and when.')}<div class="card">${list.length ? html`<div class="tw"><table class="t"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>On</th><th>Details</th></tr></thead><tbody>${list.map(l => html`<tr><td class="nowrap">${dateTime(l.at)}</td><td>${l.by}</td><td>${l.action}</td><td>${l.target}</td><td>${l.detail}</td></tr>`)}</tbody></table></div>` : empty('No activity yet', 'Changes made by staff will appear here.', null, 'list')}</div>`;
+  });
+
+  /* ---------- Customer support ---------- */
+  page('admin-support', { layout: 'admin', access: 'staff:support' }, async (main, { me }) => {
+    const S = api.support, STATUSES = Object.values(S.statuses);
+    let data = await api.admin.support();
+    const keyOf = (map, label) => Object.keys(map).find(k => map[k] === label);
+    const head = () => html`${title('Customer support', 'Complaints and problems sent from the website. Contact each customer within one working day.')}
+      <div class="tiles mb"><div class="stat"><span>New, not yet handled</span><strong>${data.meta.open}</strong></div><div class="stat"><span>Being handled</span><strong>${data.meta.in_progress}</strong></div><div class="stat"><span>Past the contact time</span><strong style="${data.meta.overdue ? 'color:var(--bad)' : ''}">${data.meta.overdue}</strong></div></div>`;
+    const draw = () => listing(main, head(), filterBar('Search ticket, name, shop or order', STATUSES), (q, s) => {
+      const r = data.list.filter(x => (!s || x.status === s) && [x.number, x.name, x.organisation, x.orderNumber, x.subject, x.phone, x.email].join(' ').toLowerCase().includes(q));
+      return r.length ? html`<div class="tw"><table class="t"><thead><tr><th>Ticket</th><th>From</th><th>Problem</th><th>Priority</th><th>Contact by</th><th>Status</th><th></th></tr></thead><tbody>${r.map(x => html`<tr><td class="mono small">${x.number}<div class="muted">${date(x.createdAt)}</div></td><td><strong>${x.organisation || x.name}</strong><div class="small muted">${x.organisation ? x.name : ''} ${x.phone || x.email}</div></td><td><strong>${x.subject}</strong><div class="small muted">${x.category}${x.orderNumber ? ' · ' + x.orderNumber : ''}</div></td><td>${badge(x.priority)}</td><td>${['Resolved', 'Closed'].includes(x.status) ? '-' : html`<span style="${x.overdue ? 'color:var(--bad);font-weight:600' : ''}">${dateTime(x.contactBy)}${x.overdue ? ' (late)' : ''}</span>`}</td><td>${badge(x.status)}<div class="small muted">${x.assignedTo}</div></td><td class="right"><button class="btn btn-line btn-sm" data-open="${x.id}">Open</button></td></tr>`)}</tbody></table></div>` : '';
+    }, empty('No support tickets', 'Problems customers report from the Support page will appear here.', null, 'help'));
+    let render = draw();
+    on(main, '[data-open]', el => {
+      const t = data.list.find(x => String(x.id) === el.dataset.open);
+      const via = { phone: 'Phone call', whatsapp: 'WhatsApp', email: 'Email' }[t.preferred] || t.preferred;
+      modal(t.number + ' · ' + t.subject, html`<div class="stack">
+        <dl class="kv"><dt>From</dt><dd>${t.name}${t.organisation ? ', ' + t.organisation : ''}</dd><dt>Mobile</dt><dd>${t.phone ? html`<a class="link" href="tel:${t.phone}">${t.phone}</a>` : '-'}</dd><dt>Email</dt><dd>${t.email ? html`<a class="link" href="mailto:${t.email}">${t.email}</a>` : '-'}</dd><dt>Contact by</dt><dd>${via}, before ${dateTime(t.contactBy)}</dd><dt>About</dt><dd>${t.category}${t.orderNumber ? ' · ' + t.orderNumber : ''}</dd><dt>Raised</dt><dd>${dateTime(t.createdAt)}</dd></dl>
+        <div class="sup-msg">${t.message}</div>
+        ${t.notes.length ? html`<div><h4 class="mb">Internal notes</h4>${t.notes.map(n => html`<p class="small mb-0"><strong>${n.by}</strong> ${dateTime(n.at)}<br>${n.text}</p>`)}</div>` : ''}
+        <form class="form" novalidate>
+          <div class="form-2">${field('status', 'Status', { type: 'select', value: t.status, options: STATUSES })}${field('priority', 'Priority', { type: 'select', value: t.priority, options: Object.values(S.priorities) })}</div>
+          ${field('assignedTo', 'Handled by', { value: t.assignedTo || me.name })}
+          ${field('reply', 'Reply to the customer', { type: 'textarea', rows: 3, value: t.reply, hint: 'The customer sees this on the Support page and in their account.' })}
+          ${field('note', 'Internal note (staff only)', { type: 'textarea', rows: 2 })}
+          <button class="btn btn-red" type="submit">Save</button></form></div>`, async v => {
+        await api.admin.updateTicket(t.id, { status: keyOf(S.statuses, v.status), priority: keyOf(S.priorities, v.priority), assignedTo: v.assignedTo, reply: v.reply, note: v.note });
+        data = await api.admin.support(); render = draw(); toast('Ticket saved');
+      });
+    });
   });
 })();

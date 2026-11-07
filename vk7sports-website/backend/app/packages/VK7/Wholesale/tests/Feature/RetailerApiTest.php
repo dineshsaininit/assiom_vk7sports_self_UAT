@@ -97,7 +97,7 @@ function adminOffer(int $quoteId, float $percent = 10): void
 /**
  * Walk the checkout steps for the retailer's cart.
  */
-function checkout(array $retailer)
+function checkout(array $retailer, string $method = 'moneytransfer')
 {
     $address = [
         'first_name' => 'Test',
@@ -116,7 +116,7 @@ function checkout(array $retailer)
 
     asRetailer($retailer, 'POST', '/api/v1/checkout/shipping', ['shipping_method' => 'flatrate_flatrate'])->assertOk();
 
-    asRetailer($retailer, 'POST', '/api/v1/checkout/payment', ['method' => 'moneytransfer'])->assertOk();
+    asRetailer($retailer, 'POST', '/api/v1/checkout/payment', ['method' => $method])->assertOk();
 
     return asRetailer($retailer, 'POST', '/api/v1/checkout/order');
 }
@@ -523,9 +523,11 @@ it('tracks an order only with its number and mobile, and lets the owner cancel i
         ->assertOk()
         ->assertJsonMissingPath('data.grand_total');
 
-    asRetailer($bravo, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'x'])->assertNotFound();
+    asRetailer($bravo, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'x', 'accept_deduction' => true])->assertNotFound();
 
-    asRetailer($alpha, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'Fictional reason'])
+    asRetailer($alpha, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'Fictional reason'])->assertUnprocessable();
+
+    asRetailer($alpha, 'POST', "/api/v1/orders/{$order['id']}/cancel", ['reason' => 'Fictional reason', 'accept_deduction' => true])
         ->assertOk()
         ->assertJsonPath('data.status', 'canceled');
 });

@@ -54,7 +54,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'stripe/*',
         ]);
 
-        $middleware->trustProxies(at: '*');
+        /**
+         * Only trust forwarded client addresses from known proxies, otherwise anyone could fake their
+         * address and get around the per-address rate limits. Set TRUSTED_PROXIES to the proxy ranges
+         * in front of the app (for example Cloudflare or the host's load balancer), comma separated.
+         */
+        $middleware->trustProxies(at: array_values(array_filter(array_map('trim', explode(',', (string) (env('TRUSTED_PROXIES') ?: '127.0.0.1,::1'))))));
     })
     ->withSchedule(function (Schedule $schedule) {
         //

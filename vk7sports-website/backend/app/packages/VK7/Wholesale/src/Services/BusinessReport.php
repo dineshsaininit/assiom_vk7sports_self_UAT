@@ -4,7 +4,9 @@ namespace VK7\Wholesale\Services;
 
 use Illuminate\Support\Collection;
 use VK7\Wholesale\Models\Enquiry;
+use VK7\Wholesale\Models\OrderTerm;
 use VK7\Wholesale\Models\Payment;
+use VK7\Wholesale\Models\SupportTicket;
 use Webkul\B2BSuite\Models\CustomerQuote;
 use Webkul\Customer\Models\CustomerProxy;
 use Webkul\Sales\Models\OrderItemProxy;
@@ -24,6 +26,7 @@ class BusinessReport
         protected OrderFinance $finance,
         protected CatalogueDesk $catalogue,
         protected StoreSettings $settings,
+        protected RetailerStanding $standing,
     ) {}
 
     /**
@@ -44,6 +47,9 @@ class BusinessReport
             'pendingRetailers' => $this->companyQuery()->where('status', 0)->where('is_suspended', 0)->count(),
             'readyToDispatch' => $rows->whereIn('stage', ['Confirmed', 'Packing'])->count(),
             'openQuotes' => CustomerQuote::query()->where('status', CustomerQuote::STATUS_OPEN)->count(),
+            'refundsPending' => OrderTerm::where('refund_status', 'pending')->count(),
+            'highRiskClients' => $this->companyQuery()->where('status', 1)->pluck('id')->filter(fn ($id) => $this->standing->score($id) < 40)->count(),
+            'openSupport' => SupportTicket::query()->whereIn('status', ['open', 'in_progress'])->count(),
             'newEnquiries' => Enquiry::query()->where('status', 'new')->where('type', '!=', 'retailer_application')->count(),
             'lowStock' => $this->catalogue->lowStock($this->settings->lowStock()),
             'recent' => $rows->sortByDesc('id')->take(6)->values(),
@@ -206,7 +212,11 @@ class BusinessReport
      */
     protected function client($client): array
     {
+        $score = $this->standing->score($client->id);
+
         return [
+            'score' => $score,
+            'tier' => $this->standing->tier($score),
             'id' => $client->id,
             'company' => $client->businessName() ?: $client->name,
             'contact' => $client->name,

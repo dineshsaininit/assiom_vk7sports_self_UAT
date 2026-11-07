@@ -56,6 +56,12 @@ return [
         'sort' => 8,
     ],
     [
+        'key' => 'vk7_desk.support',
+        'name' => 'Customer support',
+        'route' => 'admin.vk7.enquiries.index',
+        'sort' => 8,
+    ],
+    [
         'key' => 'vk7_desk.quotes',
         'name' => 'Quotes',
         'route' => 'admin.vk7.enquiries.index',

@@ -45,6 +45,8 @@ Validation errors return 422 with `{ "message": "...", "errors": { "field": ["..
 | Profile, password, addresses | `GET` and `PUT /account`, `PUT /account/password`, `/account/addresses` |
 | Public order tracking | `POST /orders/track` |
 | My enquiries | `GET /enquiries/mine` |
+| Customer support | `POST /support`, `POST /support/check` |
+| My support tickets | `GET /support/mine` |
 | Pay advance or balance | `POST /orders/{id}/payments`, `/payments/{paymentId}/confirm`, `/payments/reference` |
 | Account statement | `GET /account/statement` |
 | Single staff admin | `/admin/*`, see [Staff business desk](#staff-business-desk). Bagisto's panel is closed. |
@@ -131,6 +133,14 @@ Error codes: `INVALID_CREDENTIALS` (401), `ACCOUNT_PENDING`, `EMAIL_NOT_VERIFIED
 ### `POST /enquiries`
 
 Required: `name`, `email`, `message`. Optional: `type` (from `enquiry_types`), `business_name`, `phone`, `city`, `quantity`, `product_id`. Returns 201. Sales sees it under Enquiries in the admin. Custom orders use this form with `type: "custom"`. There is no custom-order workflow yet.
+
+### `POST /support`
+
+A complaint or problem from anyone. Required: `name`, `category` (`order`, `payment`, `delivery`, `product`, `account`, `website`, `other`), `subject`, `message` (10 or more characters), and `phone` (10-digit Indian mobile) or `email`. Optional: `business_name`, `order_number`, `preferred_contact` (`phone`, `whatsapp`, `email`). Send the retailer token if there is one: the ticket is then linked to the account and the account email is used when none is given. Returns 201 with `number` (for example `SUP-00012`), `status: "open"`, `contact_by` (24 hours later) and `contact_within_hours`. Payment and delivery problems start at high priority.
+
+### `POST /support/check`
+
+`{ number, contact }`, where `contact` is the mobile or email used on the ticket. Returns the ticket's status and any staff reply, or 404 `NOT_FOUND`. Internal notes are never returned.
 
 ## Retailer endpoints (token required)
 
@@ -270,7 +280,7 @@ Display `stage`, not `status`. `status` is Bagisto's own value, kept in step wit
 
 ## Staff business desk
 
-Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). Tokens last 12 hours and are refused on retailer routes, and the other way round. An account using two-factor sign-in gets `TWO_FACTOR_REQUIRED` and must use the panel: the desk has no second step yet. Each route needs an area from the role: `dashboard`, `retailers`, `enquiries`, `quotes`, `orders`, `payments`, `dispatch`, `products`, `inventory`, `reports`, `staff`, `settings` or `audit`. A custom role grants them through the `vk7_desk.*` permissions in Bagisto's role screen; otherwise the route returns `FORBIDDEN`.
+Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). Tokens last 12 hours and are refused on retailer routes, and the other way round. An account using two-factor sign-in gets `TWO_FACTOR_REQUIRED` and must use the panel: the desk has no second step yet. Each route needs an area from the role: `dashboard`, `retailers`, `enquiries`, `support`, `quotes`, `orders`, `payments`, `dispatch`, `products`, `inventory`, `reports`, `staff`, `settings` or `audit`. A custom role grants them through the `vk7_desk.*` permissions in Bagisto's role screen; otherwise the route returns `FORBIDDEN`.
 
 | Area | Calls |
 |---|---|
@@ -286,6 +296,7 @@ Sign in with `POST /admin/login` (`{ email, password }`, a Bagisto admin user). 
 | `inventory` | `GET /admin/inventory`, `POST /admin/inventory/adjust` `{ variant_id, change, reason, note }`, `GET /admin/stock-log` |
 | `quotes` | `GET /admin/quotes`, `GET /admin/quotes/{id}`, `POST /admin/quotes/{id}/offer` `{ amount }`, `POST /admin/quotes/{id}/accept` `{ amount }` (accepts the retailer's latest amount; `AMOUNT_CHANGED` if it no longer matches), `POST /admin/quotes/{id}/reject` |
 | `enquiries` | `GET /admin/enquiries`, `PUT /admin/enquiries/{id}` `{ status, note, follow_up_on }` |
+| `support` | `GET /admin/support` (with `meta.open`, `meta.in_progress`, `meta.overdue`), `GET /admin/support/{id}`, `PUT /admin/support/{id}` `{ status, priority, assigned_to, reply, note }`. Status is `open`, `in_progress`, `resolved` or `closed`; priority is `low`, `normal`, `high` or `urgent`. `reply` is shown to the customer, `note` stays with staff. Sales has this area by default. |
 | `staff` | `GET`, `POST /admin/staff`, `PUT /admin/staff/{id}`, `POST /admin/staff/{id}/toggle` |
 | `settings` | `GET`, `PUT /admin/settings`: business rules, company details, bank details |
 
@@ -309,3 +320,36 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 ```
+
+## Payment policy and retailer debit score
+
+Agreed with the chartered accountant on 7 November 2026. All amounts and percentages below are defaults; the owner changes them under Settings.
+
+**Advance.** Every order needs at least a 20 percent advance (`advancePct`, never below 20). The advance and the payment mode are fixed when the order is placed and shown in `finance.advance_percent`, `finance.payment_mode` and `finance.first_order`.
+
+**New retailers** (no order paid in full yet): orders above Rs 25,000 need a 50 percent advance, and orders above Rs 1,00,000 need full payment before dispatch. Staff see a "First order" warning on the order.
+
+**Debit score** from 0 to 100, starting at 60, per company account. Events: order paid in full +5, cancelled before payment -3, cancelled after the advance -8, cancelled while packing -12, advance not paid in time -5, payment reference rejected -10, cash-on-delivery balance unpaid 7 days after delivery -10, cash on delivery refused -20, and manual staff adjustments of up to 50 points with a reason. Bands: Excellent 80+, Good 60 to 79, Watch 40 to 59 (advance at least 30 percent), High risk below 40 (advance at least 50 percent, below 20 full payment).
+
+**Payment modes.** `prepaid` (checkout method `moneytransfer`): the balance is payable from confirmation and must be paid in full before dispatch, otherwise dispatch returns `BALANCE_DUE`. `cod` (checkout method `cashondelivery`): the balance is collected on delivery. Cash on delivery is offered only with a score of 70 or more, at least 2 orders paid in full and an order up to Rs 1,00,000, unless staff set the client to always allow or never allow. Otherwise checkout returns `COD_NOT_AVAILABLE`.
+
+**Cancellation.** Allowed until dispatch. Charge as a percent of the order value: 0 before payment, 5 after the advance, 10 while packing or when a cash-on-delivery parcel is refused. The charge is multiplied by 0.5 (Excellent), 1 (Good), 1.5 (Watch) or 2 (High risk), never exceeds what was paid, and the rest becomes `refund_due` with `refund_status: pending` until finance records it. Staff cancelling for a business reason (`fault: business`) charge nothing and do not change the score.
+
+| Who | Endpoint | Notes |
+|---|---|---|
+| Retailer | `GET /account/standing` | Score, band, cash on delivery access, recent events (no staff notes) and the rules. |
+| Retailer | `GET /checkout/policy` | Advance and cash on delivery for the current order list. |
+| Retailer | `GET /orders/{id}/cancellation` | The charge, refund and score change before cancelling. |
+| Retailer | `POST /orders/{id}/cancel` | `{ reason, accept_deduction: true }`. |
+| Staff `retailers` | `GET /admin/clients/{id}/standing`, `POST /admin/clients/{id}/standing` | `{ cod_override: auto/allow/block, points: -50..50, note }`, note required. |
+| Staff `orders` | `GET /admin/orders/{id}/cancellation`, `POST /admin/orders/{id}/cancel` | Cancel takes `{ reason, fault: retailer/business }`. |
+| Staff `orders` | `POST /admin/orders/{id}/cod-refused` | `{ note }`. Marks the order Returned. Add the stock back from Inventory. |
+| Staff `payments` | `POST /admin/orders/{id}/refund` | `{ reference }` once the refund is paid. |
+
+## Security notes
+
+- Every query goes through the framework's bound parameters. No raw SQL uses request input, record ids in routes must be digits, and catalogue filters only accept fixed patterns.
+- Rate limits per address: 240 API calls, 20 sign-ins and 10 public forms a minute. Money and account actions (cancel, refund, standing changes) are also limited to 20 a minute per signed-in token.
+- JSON bodies over 256 KB and uploads over 25 MB are refused with `413` before any work is done.
+- API answers carry `Cache-Control: no-store`, and headers that name the platform are removed.
+- The app trusts forwarded addresses only from `TRUSTED_PROXIES` (default: this machine). In production, put the site and API behind Cloudflare (free DDoS protection and firewall) and set `TRUSTED_PROXIES` to Cloudflare's published ranges or the host's load balancer, never `*`.

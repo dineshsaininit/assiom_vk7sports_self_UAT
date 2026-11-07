@@ -429,7 +429,7 @@
   });
 
   const POLICIES = {
-    terms: ['Terms of sale', [['Who can buy', 'Goods are sold only to approved trade customers for resale.'], ['Minimum order', 'Each order must meet the minimum order quantity shown on the website.'], ['Prices', 'Prices shown are trade prices and exclude GST unless stated. An accepted quote locks the price for that order.'], ['Payment', 'An advance is required to confirm an order. The order is confirmed only after the payment is verified.'], ['Stock', 'Stock is held for a limited time while the advance is awaited. If the advance is not received in time, the order expires.'], ['Cancellation', 'An order can be cancelled online until the advance is verified. After that, please contact sales.']]],
+    terms: ['Terms of sale', [['Who can buy', 'Goods are sold only to approved trade customers for resale.'], ['Minimum order', 'Each order must meet the minimum order quantity shown on the website.'], ['Prices', 'Prices shown are trade prices and exclude GST unless stated. An accepted quote locks the price for that order.'], ['Advance payment', 'Every order needs an advance of at least 20% of the order value to be confirmed. The order is confirmed only after the payment is verified. First orders from a new retailer need a higher advance above a set order value, and full payment before dispatch for large first orders.'], ['Balance', 'For a prepaid order, the balance is paid before dispatch. Cash on delivery for the balance is offered only to retailers with a good payment score and enough orders paid in full, and up to a set order value.'], ['Stock', 'Stock is held for a limited time while the advance is awaited. If the advance is not received in time, the order expires.'], ['Cancellation', 'An order can be cancelled online until it is dispatched. Before any payment there is no charge. After the advance a charge of 5% of the order value applies, and 10% once packing has started. The charge is halved for retailers with an Excellent payment score and is higher for retailers with a low score. It never exceeds the amount paid, and the rest is refunded to your bank. A refused cash-on-delivery parcel is treated as a cancellation while packing. If we cancel for our own reasons, nothing is charged.'], ['Payment score', 'Every retailer has a payment score from 0 to 100, starting at 60. Orders paid in full raise it. Cancellations, an advance not paid in time, rejected payment references, late balances and refused deliveries lower it. The score decides the advance asked, access to cash on delivery and the cancellation charge. You can see your score in your account.']]],
     shipping: ['Shipping policy', [['Dispatch', 'Orders are packed after confirmation and sent by courier or transporter. You will receive the courier or LR number on your order page.'], ['Delivery charges', 'Delivery charges and partners will be listed here once confirmed.'], ['Delivery time', 'Delivery time depends on your location and the transporter.']]],
     returns: ['Returns and replacements', [['Checking your goods', 'Please check your goods when they arrive and tell us about any damage or shortage as soon as you can.'], ['Replacements', 'Replacement rules will be listed here once confirmed.'], ['Customised orders', 'Customised goods are made to your approved artwork, so please check the proof carefully before approving it.']]],
     privacy: ['Privacy policy', [['What we collect', 'Your shop details, contact details, order history and the payment references you submit.'], ['How we use it', 'To review your application, process your orders and contact you about them.'], ['Sharing', 'We share details with delivery partners only as needed to deliver your order.'], ['Your choices', 'Contact us to correct your details or to ask about your information.']]]
@@ -526,7 +526,7 @@
   page('admin-login', { layout: 'bare' }, async (main, { me }) => {
     if (me && me.kind === 'staff') return VK7.redirect('admin.html');
     main.innerHTML = html`<div class="auth" style="min-height:100vh;background:var(--navy)"><div class="auth-card">
-      <img src="assets/img/brand/logo-navy.png" alt="VK7SPORTS" style="height:34px;margin-bottom:18px">
+      <img src="assets/img/brand/logo-navy.png" alt="VK7SPORTS" style="height:64px;margin-bottom:18px">
       <h1 style="font-size:22px">Staff sign-in</h1><p class="muted">For VK7SPORTS staff only.</p>
       <form class="form" novalidate>${field('email', 'Work email', { type: 'email', required: true, autocomplete: 'username' })}${field('password', 'Password', { type: 'password', required: true, autocomplete: 'current-password' })}<button class="btn btn-navy btn-block" type="submit">Sign in</button></form>
       <p class="center mt-l mb-0"><a class="link" href="index.html">Back to website</a></p></div></div>`;
@@ -536,5 +536,47 @@
 
   page('not-found', { layout: 'public' }, async main => {
     main.innerHTML = html`<div class="err404"><b>404</b><h1>Page not found</h1><p class="muted">The page you are looking for has moved or does not exist.</p><div class="row" style="justify-content:center"><a class="btn btn-red" href="index.html">Go to home</a><a class="btn btn-line" href="catalogue.html">View catalogue</a></div></div>`;
+  });
+
+  /* ---------- Customer support: anyone can report a problem; signed-in retailers get it on their account ---------- */
+  page('support', { layout: 'public' }, async (main, { me }) => {
+    const S = api.support, retailer = me && me.kind === 'retailer' ? me : null;
+    const cats = Object.entries(S.categories);
+    const pre = param('order') || '';
+    main.innerHTML = html`${pageHead('Customer support', 'Facing a problem with an order, payment, delivery or the website? Tell us here and our support team will contact you.', [['Home', 'index.html'], ['Customer support']])}
+    <section class="sec"><div class="wrap"><div class="split">
+      <div class="form-card" id="box"><h2 class="mb" style="font-size:20px">Tell us about the problem</h2>
+        <form class="form" novalidate>
+          <div class="form-2">${field('name', 'Your name', { required: true, autocomplete: 'name', value: retailer ? retailer.name : '' })}${field('business_name', 'Shop or organisation', { value: retailer ? retailer.company : '' })}</div>
+          <div class="form-2">${field('phone', 'Mobile number', { type: 'tel', autocomplete: 'tel', inputmode: 'numeric', maxlength: 10, hint: 'Give a mobile number or an email, or both.' })}${field('email', 'Email', { type: 'email', autocomplete: 'email', value: retailer ? retailer.email : '' })}</div>
+          <div class="form-2">${field('category', 'What is it about?', { type: 'select', required: true, options: [['', 'Choose one'], ...cats] })}${field('order_number', 'Order or quote number (if any)', { value: pre, placeholder: 'For example VK7-00012' })}</div>
+          ${field('subject', 'Short title', { required: true, maxlength: 150, placeholder: 'For example: parcel not received' })}
+          ${field('message', 'Describe the problem', { type: 'textarea', required: true, rows: 5, placeholder: 'What happened, when it happened, and what you would like us to do.' })}
+          <div class="field"><span class="st-label">How should we contact you?</span><div class="row" role="radiogroup" aria-label="How should we contact you?">${[['phone', 'Phone call'], ['whatsapp', 'WhatsApp'], ['email', 'Email']].map((o, i) => html`<label class="check" style="font-weight:400"><input type="radio" name="preferred_contact" value="${o[0]}" ${i === 0 ? raw('checked') : ''}><span>${o[1]}</span></label>`)}</div></div>
+          <button class="btn btn-red" type="submit">Send to support</button>
+        </form></div>
+      <div class="stack">
+        <div class="card card-pad"><h3 class="mb">What happens next</h3>
+          <ol class="sup-steps"><li><strong>You get a ticket number</strong><span>Keep it to check progress at any time.</span></li><li><strong>We contact you within one working day</strong><span>By phone, WhatsApp or email, as you choose.</span></li><li><strong>We sort it out</strong><span>You see our reply and the status here${retailer ? ' and in your account' : ''}.</span></li></ol></div>
+        <div class="card card-pad" id="check"><h3 class="mb">Check a ticket</h3>
+          <form class="form" novalidate>${field('number', 'Ticket number', { required: true, placeholder: 'SUP-00001' })}${field('contact', 'Mobile or email used', { required: true })}<button class="btn btn-line" type="submit">Check status</button></form><div data-result></div></div>
+        <div class="card card-pad"><h3 class="mb">Urgent?</h3><dl class="kv" style="grid-template-columns:90px 1fr"><dt>Phone</dt><dd>${contactValue(C.phone)}</dd><dt>Email</dt><dd>${C.email ? html`<a class="link" href="mailto:${C.email}">${C.email}</a>` : tbc()}</dd><dt>Hours</dt><dd>${contactValue(C.hours)}</dd></dl></div>
+      </div>
+    </div></div></section>`;
+    const how = { phone: 'call you', whatsapp: 'message you on WhatsApp', email: 'email you' };
+    onSubmit(main.querySelector('#box form'), async v => {
+      const t = await S.create(v);
+      const where = t.preferred === 'email' ? (v.email || 'your email') : (v.phone || 'your mobile');
+      main.querySelector('#box').innerHTML = html`<div class="center" style="padding:20px 0"><div class="state-ico" style="background:var(--ok-bg);color:var(--ok)">${icon('check', 24)}</div>
+        <h2>We have received your complaint</h2><p class="muted">Thank you for telling us. Your ticket number is</p><p class="mono" style="font-size:20px;font-weight:700">${t.number}</p>
+        <div class="sup-promise"><strong>We will contact you</strong><p class="mb-0">Our support team will ${how[t.preferred] || 'contact you'} ${t.preferred === 'email' ? 'at' : 'on'} <strong>${where}</strong> within one working day, by ${dateTime(t.contactBy)}.</p></div>
+        <p class="muted mt">Please keep the ticket number. You can check its status on this page${retailer ? ' or under Support tickets in your account' : ''}.</p>
+        <div class="row" style="justify-content:center">${retailer ? html`<a class="btn btn-navy" href="account-support.html">View my tickets</a>` : ''}<a class="btn btn-line" href="support.html">Report another problem</a></div></div>`;
+      window.scrollTo({ top: main.querySelector('#box').getBoundingClientRect().top + window.scrollY - 96 });
+    });
+    onSubmit(main.querySelector('#check form'), async v => {
+      const t = await S.check(v.number, v.contact);
+      main.querySelector('#check [data-result]').innerHTML = html`<div class="sup-result"><div class="row between"><span class="mono">${t.number}</span>${badge(t.status)}</div><p class="mb-0"><strong>${t.subject}</strong></p><p class="small muted mb-0">Raised ${dateTime(t.createdAt)}</p>${t.reply ? html`<div class="sup-reply"><span class="small muted">Reply from VK7 support</span><p class="mb-0">${t.reply}</p></div>` : html`<p class="small muted mb-0">We will contact you by ${dateTime(t.contactBy)}.</p>`}</div>`;
+    });
   });
 })();

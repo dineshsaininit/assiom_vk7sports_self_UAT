@@ -12,6 +12,7 @@ use VK7\Wholesale\Models\Shipment;
 use VK7\Wholesale\Services\ActivityRecorder;
 use VK7\Wholesale\Services\BusinessReport;
 use VK7\Wholesale\Services\OrderFinance;
+use VK7\Wholesale\Services\RetailerStanding;
 use VK7\Wholesale\Services\ShipmentDesk;
 use Webkul\Customer\Repositories\CustomerRepository;
 use Webkul\Sales\Repositories\OrderRepository;
@@ -28,7 +29,64 @@ class DeskController extends Controller
         protected OrderRepository $orderRepository,
         protected CustomerRepository $customerRepository,
         protected ActivityRecorder $activity,
+        protected RetailerStanding $standing,
     ) {}
+
+    /**
+     * A client's payment standing for staff.
+     */
+    public function standing(int $id): JsonResponse
+    {
+        return response()->json(['data' => $this->standing->standing($this->clientOr404($id)->id, true)]);
+    }
+
+    /**
+     * Change cash on delivery access or adjust the score by hand, with a reason.
+     */
+    public function updateStanding(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'cod_override' => ['nullable', Rule::in(['auto', 'allow', 'block'])],
+            'points' => ['nullable', 'integer', 'between:-50,50'],
+            'note' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        $client = $this->clientOr404($id);
+
+        $this->standing->adjust($client->id, $this->staffName($request), $data['note'], $data['cod_override'] ?? null, (int) ($data['points'] ?? 0));
+
+        $this->activity->record($this->staffName($request), 'Changed payment standing', $client->email, $data['note']);
+
+        return $this->standing($id);
+    }
+
+    /**
+     * What cancelling an order now would cost the retailer.
+     */
+    public function cancellationQuote(int $id): JsonResponse
+    {
+        return response()->json(['data' => $this->finance->cancellationQuote($this->orderOr404($id))]);
+    }
+
+    /**
+     * Record that a cash-on-delivery parcel was refused.
+     */
+    public function codRefused(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['note' => ['required', 'string', 'min:5', 'max:255']]);
+
+        return $this->guarded($id, fn ($order) => $this->finance->markCodRefused($order, $data['note'], $this->staffName($request)));
+    }
+
+    /**
+     * Record a refund paid back after a cancellation.
+     */
+    public function markRefunded(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate(['reference' => ['required', 'string', 'max:100']]);
+
+        return $this->guarded($id, fn ($order) => $this->finance->markRefunded($order, $data['reference'], $this->staffName($request)));
+    }
 
     /**
      * Return the owner's dashboard.
@@ -107,6 +165,9 @@ class DeskController extends Controller
             'number' => $order->increment_id,
             'company' => $this->report->companyName($order),
             'customer_id' => $order->customer_id,
+            'client_id' => $companyId = $this->standing->companyId((int) $order->customer_id),
+            'client_score' => $score = $this->standing->score($companyId),
+            'client_tier' => $this->standing->tier($score),
             'created_at' => $order->created_at,
             'pieces' => (int) $order->total_qty_ordered,
             'shipping_total' => (float) $order->base_shipping_amount,
@@ -162,9 +223,12 @@ class DeskController extends Controller
      */
     public function cancelOrder(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+            'fault' => ['required', Rule::in(['retailer', 'business'])],
+        ]);
 
-        return $this->guarded($id, fn ($order) => $this->finance->cancel($order, $data['reason'], $this->staffName($request)));
+        return $this->guarded($id, fn ($order) => $this->finance->cancel($order, $data['reason'], $this->staffName($request), $data['fault']));
     }
 
     /**
@@ -261,7 +325,7 @@ class DeskController extends Controller
     protected function guarded(int $id, callable $action): JsonResponse
     {
         try {
-            $action($this->orderRepository->find($id));
+            $action($this->orderOr404($id));
         } catch (BusinessRuleException $e) {
             return $this->fail($e->getMessage(), $e->errorCode, $e->status);
         }
