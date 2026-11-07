@@ -113,6 +113,18 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        'mongodb' => [
+            'driver' => 'mongodb',
+            'dsn' => env('MONGODB_URI'),
+            'database' => env('MONGODB_DATABASE', 'vk7sports_uat'),
+            'options' => [
+                'appname' => 'vk7sports-backend',
+                'serverSelectionTimeoutMS' => (int) env('MONGODB_TIMEOUT_MS', 2000),
+                'connectTimeoutMS' => (int) env('MONGODB_TIMEOUT_MS', 2000),
+                'socketTimeoutMS' => (int) env('MONGODB_TIMEOUT_MS', 2000) * 2,
+            ],
+        ],
+
     ],
 
     /*

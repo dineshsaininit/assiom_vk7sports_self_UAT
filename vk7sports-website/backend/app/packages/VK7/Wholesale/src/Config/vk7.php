@@ -40,4 +40,12 @@ return [
         ],
         'origin' => ['city' => 'Mumbai', 'state' => 'MH'],
     ],
+
+    'atlas' => [
+        'mirror_activity' => (bool) env('VK7_ATLAS_MIRROR', true),
+        'connection' => 'mongodb',
+        'activity_collection' => 'activity_log',
+        'check_collection' => 'connection_checks',
+        'cooldown_seconds' => 60,
+    ],
 ];

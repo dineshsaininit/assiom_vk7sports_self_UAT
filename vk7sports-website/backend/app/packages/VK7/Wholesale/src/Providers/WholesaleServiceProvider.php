@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use VK7\Wholesale\Cart;
 use VK7\Wholesale\Console\Commands\ApplyPolicy;
+use VK7\Wholesale\Console\Commands\AtlasCheck;
 use VK7\Wholesale\Console\Commands\DemoData;
 use VK7\Wholesale\Console\Commands\ExpireHolds;
 use VK7\Wholesale\Console\Commands\ResetAdminTwoFactor;
@@ -84,7 +85,7 @@ class WholesaleServiceProvider extends ServiceProvider
         $this->registerRateLimits();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ApplyPolicy::class, DemoData::class, ExpireHolds::class, ResetAdminTwoFactor::class, SetupStore::class]);
+            $this->commands([ApplyPolicy::class, AtlasCheck::class, DemoData::class, ExpireHolds::class, ResetAdminTwoFactor::class, SetupStore::class]);
 
             $this->callAfterResolving(Schedule::class, fn (Schedule $schedule) => $schedule->command('vk7:expire-holds')->hourly());
         }
