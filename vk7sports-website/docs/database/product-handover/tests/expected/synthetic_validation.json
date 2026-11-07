@@ -1,0 +1,41 @@
+{
+  "valid": true,
+  "mapping_compatible": true,
+  "synthetic": true,
+  "database_verified": false,
+  "business_authenticity_verified": false,
+  "native_image_mode": "url",
+  "summary": {
+    "styles": 1,
+    "variants": 2,
+    "inventory_rows": 3,
+    "tier_rows": 6,
+    "media_rows": 3,
+    "stock_units": 9
+  },
+  "errors": [],
+  "blockers": [],
+  "warnings": [
+    {
+      "code": "REMOTE_MEDIA_UNVERIFIED",
+      "file": "media.csv",
+      "row": 2,
+      "field": "location",
+      "message": "URL availability/content/rights require separate verification."
+    },
+    {
+      "code": "REMOTE_MEDIA_UNVERIFIED",
+      "file": "media.csv",
+      "row": 3,
+      "field": "location",
+      "message": "URL availability/content/rights require separate verification."
+    },
+    {
+      "code": "REMOTE_MEDIA_UNVERIFIED",
+      "file": "media.csv",
+      "row": 4,
+      "field": "location",
+      "message": "URL availability/content/rights require separate verification."
+    }
+  ]
+}
