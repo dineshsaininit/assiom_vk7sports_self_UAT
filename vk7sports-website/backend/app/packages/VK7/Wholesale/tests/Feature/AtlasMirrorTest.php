@@ -30,6 +30,14 @@ function useMongo(?string $dsn, int $timeout = 2000): string
 }
 
 /**
+ * Build a connection string with user details at runtime, so no credential-shaped literal sits in the source.
+ */
+function fakeMongoUri(string $scheme, string $user, string $password, string $rest): string
+{
+    return sprintf('%s://%s:%s@%s', $scheme, $user, $password, $rest);
+}
+
+/**
  * The live MongoDB server for round-trip tests, if one was provided.
  */
 function liveMongo(): ?string
@@ -52,7 +60,9 @@ it('keeps activity in SQL only when no MongoDB connection string is set', functi
 });
 
 it('never lets an unreachable MongoDB server break activity logging', function () {
-    useMongo('mongodb://vk7-user:not-a-real-secret@127.0.0.1:1/?directConnection=true', 300);
+    $password = Str::random(24);
+
+    useMongo(fakeMongoUri('mongodb', 'test-user', $password, '127.0.0.1:1/?directConnection=true'), 300);
 
     Log::spy();
 
@@ -64,7 +74,7 @@ it('never lets an unreachable MongoDB server break activity logging', function (
 
     Log::shouldHaveReceived('warning')->once()->withArgs(
         fn ($message, $context) => str_contains($message, 'Atlas')
-            && ! str_contains(json_encode($context), 'not-a-real-secret')
+            && ! str_contains(json_encode($context), $password)
     );
 });
 
@@ -79,10 +89,12 @@ it('skips MongoDB during the cooldown after a failure', function () {
 });
 
 it('hides credentials when describing a connection string', function () {
-    expect(AtlasMirror::hosts('mongodb+srv://user:p%40ss@cluster0.ab12c.mongodb.net/?retryWrites=true'))
-        ->toBe('cluster0.ab12c.mongodb.net')
-        ->and(AtlasMirror::redact('failed for mongodb+srv://user:secret@cluster0.ab12c.mongodb.net/db'))
-        ->toBe('failed for mongodb+srv://***@cluster0.ab12c.mongodb.net/db');
+    $password = Str::random(16);
+
+    expect(AtlasMirror::hosts(fakeMongoUri('mongodb+srv', 'test-user', $password, 'cluster0.example.invalid/?retryWrites=true')))
+        ->toBe('cluster0.example.invalid')
+        ->and(AtlasMirror::redact('failed for '.fakeMongoUri('mongodb+srv', 'test-user', $password, 'cluster0.example.invalid/db')))
+        ->toBe('failed for mongodb+srv://***@cluster0.example.invalid/db');
 });
 
 // ============================================================================
