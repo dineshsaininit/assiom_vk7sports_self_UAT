@@ -1,0 +1,14 @@
+
+   PASS  Packages\VK7\Wholesale\tests\Feature\AtlasMirrorTest
+  ✓ it keeps activity in SQL only when no MongoDB connection string is… 16.16s  
+  ✓ it never lets an unreachable MongoDB server break activity logging   2.07s  
+  ✓ it skips MongoDB during the cooldown after a failure                 1.81s  
+  ✓ it hides credentials when describing a connection string             1.42s  
+  ✓ it fails the atlas check clearly when no connection string is set    4.79s  
+  ✓ it fails the atlas check when the server cannot be reached           1.58s  
+  ✓ it mirrors a committed activity entry to MongoDB                     1.43s  
+  ✓ it passes the atlas check against a live MongoDB server and leaves…  2.16s  
+
+  Tests:    8 passed (17 assertions)
+  Duration: 37.65s
+

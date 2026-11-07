@@ -1,6 +1,6 @@
 # MongoDB Atlas side connection: verification evidence
 
-Date: 7 November 2026. Branch `claude/vk7sports-mongodb-atlas-c18a34`, based on `main` at `e745b38`. Not yet committed or pushed.
+Date: 7 November 2026. Branch `claude/vk7sports-mongodb-atlas-c18a34`, based on `main` at `e745b38`. Code commit `44d278a`.
 
 ## Status
 
@@ -11,7 +11,9 @@ Date: 7 November 2026. Branch `claude/vk7sports-mongodb-atlas-c18a34`, based on 
 | Existing VK7 suite: does the change break anything? | **No new failures**: same 43 failures on original and changed code (environment gaps, see below) |
 | Pint code style | Pass (7 files) |
 | **Live MongoDB Atlas cluster `vk7sports-uat`** | **VERIFIED 2026-11-07 18:38 IST**: ping, insert, read back, delete all OK; MongoDB 8.0.37; database `vk7sports_uat`; user `vk7sports_app` (readWrite); round trip 4257 ms. Report: `evidence/atlas-live-check.json` |
-| Live activity mirror into Atlas | Not run against Atlas (`mirrored_activity: 0`). Mirror path proven on local MongoDB only (test 7). |
+| **ActivityRecorder → Atlas end to end** | **PENDING, not verified.** No real staff action has been mirrored into Atlas (`mirrored_activity: 0`). The same code path passed against local MongoDB 8.0 only (test 7). |
+| **HawkScan (DAST)** | **NOT RUN.** No running app for it to scan and no `HAWK_API_KEY` configured. |
+| **43 existing VK7 test failures** | **Still present**, unchanged by this work: missing Vite build manifests (HTTP 500) and no staff/admin fixtures in the base data. Identical on original code (`evidence/failures-*.txt`). |
 
 ## Handover for Deepanjal
 
@@ -51,7 +53,7 @@ Private Docker network `vk7-atlas-test`, nothing shared with the dev stack (`vk7
 - MongoDB 8.0.32 in memory.
 - Test image `vk7-backend-php84:mongodb-pgtest` = `:mongodb` + `pdo_pgsql` (test only, not in the Dockerfile).
 
-## Atlas mirror tests (`evidence/atlas-mirror-tests.log`)
+## Atlas mirror tests (`evidence/atlas-mirror-tests.txt`)
 
 1. SQL only when no connection string is set.
 2. Unreachable MongoDB never breaks activity logging; password not in the log.
@@ -64,7 +66,7 @@ Private Docker network `vk7-atlas-test`, nothing shared with the dev stack (`vk7
 
 ## Regression comparison
 
-`evidence/vk7-suite-baseline.log` (original code) and `evidence/vk7-suite-with-change.log` (this change) were run on the same disposable database. The failure lists (`failures-*.txt`) are identical: 43 each. They come from the test environment, not this change:
+`evidence/vk7-suite-baseline.txt` (original code) and `evidence/vk7-suite-with-change.txt` (this change) were run on the same disposable database. The failure lists (`failures-*.txt`) are identical: 43 each. They come from the test environment, not this change:
 
 - Vite manifests missing (`public/themes/*/build` is not in git) → HTTP 500 on pages that render mail/views.
 - No staff/admin fixtures in the base data → `createToken() on null`.
