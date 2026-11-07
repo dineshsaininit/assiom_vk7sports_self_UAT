@@ -100,7 +100,7 @@ Serve the website from the `frontend` folder and open `http://127.0.0.1:8080`:
 php -S 127.0.0.1:8080 -t .
 ```
 
-CORS currently allows any origin in `config/cors.php`. That is safe for token calls in development. Restrict it to the frontend's address before any deployment.
+`CORS_ALLOWED_ORIGINS` defaults to the two local frontend origins above. Before deployment, set it in the hosting provider to the exact frontend origin or comma-separated origins, including `https://` and any non-default port but no path. For example, use `https://store.example.com`. Do not use `*` on a live server. If Laravel configuration is cached, clear and rebuild the config cache after changing this value.
 
 ## 6. Payments and courier
 
